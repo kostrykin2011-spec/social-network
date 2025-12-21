@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: social-network-db
+    environment:
+      POSTGRES_DB: social_network
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - social-network-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: social-network-redis
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - social-network-network
+
+  app:
+    build: .
+    container_name: social-network-app
+    restart: unless-stopped
+    volumes:
+      - ./people.csv:/app/people.csv
+      - ./posts.txt:/app/posts.txt
+    working_dir: /app
+    environment:
+      - CSV_PEOPLE_PATH=/app/people.csv
+      - CSV_POSTS_PATH=/app/posts.txt
+    ports:
+      - "8080:8080"
+    networks:
+      - social-network-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  go-mod-cache:
+    driver: local
+
+networks:
+  social-network-network:
+    driver: bridge
