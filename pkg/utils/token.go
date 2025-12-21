@@ -1,39 +1,50 @@
 package utils
 
 import (
-	"sync"
+	"fmt"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+
+	"social-network/internal/config"
 )
 
-var (
-	mutex  = &sync.RWMutex{}
-	tokens = make(map[string]string)
-)
-
-func GenerateToken() string {
-	return uuid.New().String()
+type Claims struct {
+	UserID uuid.UUID `json:"user_id"`
+	jwt.RegisteredClaims
 }
 
-func SaveToken(token, userId string) {
-	mutex.Lock()
-	defer mutex.Unlock()
+func GenerateToken(userID uuid.UUID, cfg *config.Config) (string, error) {
+	expirationTime := time.Now().Add(24 * time.Hour)
 
-	tokens[token] = userId
+	claims := &Claims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Subject:   "access_token",
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	return token.SignedString([]byte(cfg.JwtSecret))
 }
 
-func ValidateToken(token string) (string, bool) {
-	mutex.RLock()
-	defer mutex.RUnlock()
+func ValidateToken(tokenString string, cfg *config.Config) (*Claims, error) {
+	claims := &Claims{}
 
-	userId, exists := tokens[token]
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(cfg.JwtSecret), nil
+	})
 
-	return userId, exists
-}
+	if err != nil {
+		return nil, fmt.Errorf("Токен не валидный")
+	}
 
-func DeleteToken(token string) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	if !token.Valid {
+		return nil, jwt.ErrSignatureInvalid
+	}
 
-	delete(tokens, token)
+	return claims, nil
 }

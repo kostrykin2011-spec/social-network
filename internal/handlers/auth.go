@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"social-network/pkg/models"
 	"social-network/pkg/service"
-	"social-network/pkg/utils"
 )
 
 type AuthHandler interface {
@@ -22,25 +21,21 @@ func InitAuthHandler(service service.AuthService) AuthHandler {
 }
 
 func (authHandler *authHandler) UserRegister(w http.ResponseWriter, r *http.Request) {
-	var registerError = models.ErrorResponse{}
 	if r.Method != http.MethodPost {
-		registerError.Error = "Метод не найден"
-		models.SendErrorResponse(w, registerError, http.StatusMethodNotAllowed)
+		models.SendErrorResponse(w, "Метод не найден", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var request models.RegisterRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		registerError.Error = "Невалидные данные"
-		models.SendErrorResponse(w, registerError, http.StatusBadRequest)
+		models.SendErrorResponse(w, "Невалидные данные", http.StatusBadRequest)
 		return
 	}
 
 	profile, err := authHandler.authService.UserRegister(&request)
 	if err != nil {
-		registerError.Error = err.Error()
-		models.SendErrorResponse(w, registerError, http.StatusNotFound)
+		models.SendErrorResponse(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
@@ -54,34 +49,21 @@ func (authHandler *authHandler) UserRegister(w http.ResponseWriter, r *http.Requ
 }
 
 func (authHandler *authHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var loginError = models.ErrorResponse{}
 	if r.Method != http.MethodPost {
-		loginError.Error = "Метод не найден"
-		models.SendErrorResponse(w, loginError, http.StatusMethodNotAllowed)
+		models.SendErrorResponse(w, "Метод не найден", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var request models.LoginRequest
+	var request models.AuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		loginError.Error = "Невалидные данные"
-		models.SendErrorResponse(w, loginError, http.StatusBadRequest)
+		models.SendErrorResponse(w, "Невалидные данные", http.StatusBadRequest)
 		return
 	}
 
-	user, err := authHandler.authService.Login(request.Id, request.Password)
+	response, err := authHandler.authService.Login(request.Id, request.Password)
 	if err != nil {
-		loginError.Error = "Пользователь не найден"
-		models.SendErrorResponse(w, loginError, http.StatusNotFound)
+		models.SendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
 		return
-	}
-
-	token := utils.GenerateToken()
-	utils.SaveToken(token, user.Id.String())
-
-	user.Password = ""
-
-	response := models.LoginResponse{
-		Token: token,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

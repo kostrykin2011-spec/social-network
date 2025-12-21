@@ -26,9 +26,7 @@ func (repository *userRepository) Create(user *models.User, password string) err
 	query := `INSERT INTO users (id, password) VALUES ($1, $2) RETURNING created_at`
 
 	var createdAt string
-	err := repository.db.QueryRow(query,
-		user.Id,
-		password).Scan(&createdAt)
+	err := repository.db.QueryRow(query, user.Id, password).Scan(&createdAt)
 
 	if err != nil {
 		return err

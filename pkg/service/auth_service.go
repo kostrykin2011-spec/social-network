@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"social-network/internal/config"
 	"social-network/pkg/models"
 	"social-network/pkg/repository"
 	"social-network/pkg/utils"
@@ -12,16 +13,18 @@ import (
 
 type AuthService interface {
 	UserRegister(request *models.RegisterRequest) (*models.Profile, error)
-	Login(userId, password string) (*models.User, error)
+	Login(userId, password string) (*models.AuthResponse, error)
 }
 
 type authService struct {
+	config            *config.Config
 	userRepository    repository.UserRepository
 	profileRepository repository.ProfileRepository
 }
 
-func InitAuthService(userRepository repository.UserRepository, profileRepository repository.ProfileRepository) AuthService {
+func InitAuthService(config *config.Config, userRepository repository.UserRepository, profileRepository repository.ProfileRepository) AuthService {
 	return &authService{
+		config:            config,
 		userRepository:    userRepository,
 		profileRepository: profileRepository,
 	}
@@ -70,7 +73,7 @@ func (authService *authService) UserRegister(request *models.RegisterRequest) (*
 	return &profile, nil
 }
 
-func (authService *authService) Login(userId, password string) (*models.User, error) {
+func (authService *authService) Login(userId, password string) (*models.AuthResponse, error) {
 	id, err := uuid.Parse(userId)
 	if err != nil {
 		return nil, fmt.Errorf("Пользователь не зарегистрирован")
@@ -88,5 +91,10 @@ func (authService *authService) Login(userId, password string) (*models.User, er
 		return nil, fmt.Errorf("Логин или пароль указан неверно")
 	}
 
-	return user, nil
+	token, err := utils.GenerateToken(user.Id, authService.config)
+
+	return &models.AuthResponse{
+		Token:  token,
+		UserId: user.Id,
+	}, nil
 }

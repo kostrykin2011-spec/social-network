@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Профиль пользователя
 type Profile struct {
 	Id        uuid.UUID `json:"id"`
 	UserId    uuid.UUID `json:"user_id"`

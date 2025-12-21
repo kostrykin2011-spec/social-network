@@ -3,7 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+	"social-network/internal/cache"
 	"social-network/internal/config"
+	"social-network/internal/feed"
 	"social-network/internal/handlers"
 	"social-network/pkg/database"
 	"social-network/pkg/repository"
@@ -20,14 +22,30 @@ func main() {
 
 	defer db.Close()
 
+	err = cache.InitRedis(config)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer cache.Close()
+
 	userRepository := repository.InitUserRepository(db)
 	profileRepository := repository.InitProfileRepository(db)
+	friendShipRepository := repository.InitFriendShipRepository(db)
+	postRepository := repository.InitPostRepository(db)
 
-	authService := service.InitAuthService(userRepository, profileRepository)
+	// Инициализация кеша ленты
+	feedCache := feed.NewFeedCache()
+	feedService := service.InitFeedService(feedCache, postRepository, friendShipRepository)
+
+	authService := service.InitAuthService(config, userRepository, profileRepository)
 	userService := service.InitProfileService(profileRepository)
+	friendShipService := service.InitFriendShipService(userRepository, friendShipRepository, feedService)
+	postService := service.InitPostService(postRepository, userRepository, friendShipRepository, feedService)
 
-	routes := handlers.InitRoutes(authService, userService)
-	router := routes.CreateRotes()
+	routes := handlers.InitRoutes(config, authService, userService, friendShipService, postService)
+	router := routes.Run()
 
 	server := &http.Server{
 		Addr:    ":" + config.ServerPort,

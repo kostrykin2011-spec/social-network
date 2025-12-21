@@ -43,3 +43,14 @@ func ValidateRegisterRequest(firstName, lastName, password, gender, biography, c
 
 	return nil
 }
+
+func ValidatePostRequest(title, content string) error {
+	if title == "" || len(title) < 2 {
+		return fmt.Errorf("Отсутствует заголовок поста")
+	}
+	if content == "" || len(content) < 2 {
+		return fmt.Errorf("Отсутствует описание поста")
+	}
+
+	return nil
+}
