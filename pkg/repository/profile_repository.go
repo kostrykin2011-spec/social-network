@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"social-network/pkg/database"
 	"social-network/pkg/models"
 	"time"
 
@@ -10,26 +12,31 @@ import (
 )
 
 type ProfileRepository interface {
-	Create(profile *models.Profile) error
-	GetById(id uuid.UUID) (*models.Profile, error)
-	GetByUserId(userId uuid.UUID) (*models.Profile, error)
-	SearchProfiles(firstName, lastName string, limit, offset int) ([]*models.Profile, error)
+	Create(ctx context.Context, profile *models.Profile) error
+	GetById(ctx context.Context, id uuid.UUID) (*models.Profile, error)
+	GetByUserId(ctx context.Context, userId uuid.UUID) (*models.Profile, error)
+	SearchProfiles(ctx context.Context, firstName, lastName string, limit, offset int) ([]*models.Profile, error)
 }
 
 type profileRepository struct {
-	DB *sql.DB
+	routerDB *database.ReplicationRouter
 }
 
-func InitProfileRepository(db *sql.DB) ProfileRepository {
-	return &profileRepository{DB: db}
+func InitProfileRepository(routerDB *database.ReplicationRouter) ProfileRepository {
+	return &profileRepository{routerDB: routerDB}
 }
 
-func (repository *profileRepository) Create(profile *models.Profile) error {
+func (repository *profileRepository) Create(ctx context.Context, profile *models.Profile) error {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
 	query := `INSERT INTO profiles (id, user_id, first_name, last_name, birth_date, gender, biography, city) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING created_at`
 
 	var createdAt string
 
-	err := repository.DB.QueryRow(query,
+	err = db.QueryRowContext(ctx, query,
 		profile.Id,
 		profile.UserId,
 		profile.FirstName,
@@ -51,7 +58,12 @@ func (repository *profileRepository) Create(profile *models.Profile) error {
 	return nil
 }
 
-func (repository *profileRepository) GetById(id uuid.UUID) (*models.Profile, error) {
+func (repository *profileRepository) GetById(ctx context.Context, id uuid.UUID) (*models.Profile, error) {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	query := `select id, user_id, first_name, last_name, birth_date, gender, biography, city, created_at from profiles where id = $1`
 
 	var (
@@ -59,7 +71,7 @@ func (repository *profileRepository) GetById(id uuid.UUID) (*models.Profile, err
 		createdAt string
 	)
 
-	err := repository.DB.QueryRow(query, id).Scan(
+	err = db.QueryRowContext(ctx, query, id).Scan(
 		&profile.Id,
 		&profile.UserId,
 		&profile.FirstName,
@@ -81,7 +93,11 @@ func (repository *profileRepository) GetById(id uuid.UUID) (*models.Profile, err
 	return &profile, nil
 }
 
-func (repository *profileRepository) GetByUserId(userId uuid.UUID) (*models.Profile, error) {
+func (repository *profileRepository) GetByUserId(ctx context.Context, userId uuid.UUID) (*models.Profile, error) {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return nil, err
+	}
 	query := `select id, user_id, first_name, last_name, birth_date, gender, biography, city, created_at from profiles where user_id = $1`
 
 	var (
@@ -89,7 +105,7 @@ func (repository *profileRepository) GetByUserId(userId uuid.UUID) (*models.Prof
 		createdAt string
 	)
 
-	err := repository.DB.QueryRow(query, userId).Scan(
+	err = db.QueryRowContext(ctx, query, userId).Scan(
 		&profile.Id,
 		&profile.UserId,
 		&profile.FirstName,
@@ -116,7 +132,12 @@ func (repository *profileRepository) GetByUserId(userId uuid.UUID) (*models.Prof
 	return &profile, nil
 }
 
-func (repository *profileRepository) SearchProfiles(firstName, lastName string, limit, offset int) ([]*models.Profile, error) {
+func (repository *profileRepository) SearchProfiles(ctx context.Context, firstName, lastName string, limit, offset int) ([]*models.Profile, error) {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	firstNameForQuery := firstName + "%"
 	lastNameForQuery := lastName + "%"
 
@@ -124,7 +145,7 @@ func (repository *profileRepository) SearchProfiles(firstName, lastName string, 
 		WHERE last_name LIKE $1 and first_name LIKE $2 ORDER BY id LIMIT 10;
 		`
 
-	rows, err := repository.DB.Query(query, firstNameForQuery, lastNameForQuery)
+	rows, err := db.QueryContext(ctx, query, firstNameForQuery, lastNameForQuery)
 	if err != nil {
 		return nil, err
 	}

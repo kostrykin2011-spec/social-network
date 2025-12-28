@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"bufio"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"social-network/pkg/models"
@@ -36,50 +36,50 @@ func InitGenerateHandler(authService service.AuthService, friendShipService serv
 
 // Генерация пользователей и постов
 func (handler *generateHandler) GenerateData(w http.ResponseWriter, r *http.Request) {
-	maxPostCount := 70
-	maxFriendCount := 20
-	userIds, err := handler.generateUsers()
-	if err != nil {
+	//maxPostCount := 70
+	//maxFriendCount := 20
+	userIds, err := handler.generateUsers(r.Context())
+	if err == nil {
 		log.Fatalf(err.Error())
 		return
 	}
 
-	posts, _ := handler.getPostsFromFile()
-	allCountPosts := len(posts)
-	countCreatedPosts := 0
+	// posts, _ := handler.getPostsFromFile()
+	// allCountPosts := len(posts)
+	// countCreatedPosts := 0
 
-	for _, userId := range userIds {
-		for i := 1; i <= maxPostCount; i++ {
-			countCreatedPosts++
-			randIndex := rand.Intn(allCountPosts)
-			err := handler.createPostByUserId(userId, posts[randIndex])
-			if err != nil {
-			}
-		}
-	}
+	// for _, userId := range userIds {
+	// 	for i := 1; i <= maxPostCount; i++ {
+	// 		countCreatedPosts++
+	// 		randIndex := rand.Intn(allCountPosts)
+	// 		err := handler.createPostByUserId(userId, posts[randIndex])
+	// 		if err != nil {
+	// 		}
+	// 	}
+	// }
 
-	// Добавляем каждому пользователю друзей
-	countUserIds := len(userIds)
-	for _, userId := range userIds {
-		j := 1
-		for {
-			randIndex := rand.Intn(countUserIds)
-			friendId := userIds[randIndex]
-			// Добавляем друга
-			handler.friendShipService.AddFiend(userId, friendId)
-			j++
-			if j > maxFriendCount {
-				break
-			}
-		}
-	}
+	// // Добавляем каждому пользователю друзей
+	// countUserIds := len(userIds)
+	// for _, userId := range userIds {
+	// 	j := 1
+	// 	for {
+	// 		randIndex := rand.Intn(countUserIds)
+	// 		friendId := userIds[randIndex]
+	// 		// Добавляем друга
+	// 		handler.friendShipService.AddFiend(userId, friendId)
+	// 		j++
+	// 		if j > maxFriendCount {
+	// 			break
+	// 		}
+	// 	}
+	// }
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Генерация пользователей и постов успешно завершена"})
 	json.NewEncoder(w).Encode(userIds)
 }
 
-func (handler *generateHandler) generateUsers() ([]uuid.UUID, error) {
+func (handler *generateHandler) generateUsers(ctx context.Context) ([]uuid.UUID, error) {
 	filePath := os.Getenv("CSV_PEOPLE_PATH")
 	if filePath == "" {
 		return nil, fmt.Errorf("Файл people.csv не найден")
@@ -101,6 +101,9 @@ func (handler *generateHandler) generateUsers() ([]uuid.UUID, error) {
 
 	var userIds []uuid.UUID
 
+	count := 0
+	allCount := 0
+
 	for _, record := range records {
 		fio := record[0]
 		parts := strings.Split(fio, " ")
@@ -113,12 +116,16 @@ func (handler *generateHandler) generateUsers() ([]uuid.UUID, error) {
 			Biography: "Информация о пользователе....",
 			Password:  "Секретная строка",
 		}
-		profile, err := handler.authService.UserRegister(&request)
-		if err != nil {
-			return nil, err
-		}
-
-		userIds = append(userIds, profile.UserId)
+		go func() {
+			profile, _ := handler.authService.UserRegister(ctx, &request)
+			userIds = append(userIds, profile.UserId)
+			count++
+			if count > 1000 {
+				allCount += count
+				fmt.Println("Обработано:", allCount)
+				count = 0
+			}
+		}()
 	}
 
 	return userIds, nil
@@ -163,9 +170,9 @@ func (handler *generateHandler) getPostsFromFile() ([]*models.CreatePostRequest,
 }
 
 // Создание поста пользователем
-func (handler *generateHandler) createPostByUserId(userId uuid.UUID, postRequest *models.CreatePostRequest) error {
+func (handler *generateHandler) createPostByUserId(ctx context.Context, userId uuid.UUID, postRequest *models.CreatePostRequest) error {
 	postRequest.Title = userId.String()
-	err := handler.postService.AddPost(userId, postRequest)
+	err := handler.postService.AddPost(ctx, userId, postRequest)
 	if err != nil {
 		return err
 	}

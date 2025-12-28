@@ -41,7 +41,7 @@ func (handler *fiendShipHandler) AddFriend(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = handler.service.AddFiend(currentUserId, friendID)
+	err = handler.service.AddFiend(r.Context(), currentUserId, friendID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -69,7 +69,7 @@ func (handler *fiendShipHandler) DeleteFriend(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	err = handler.service.Delete(currentUserId, friendID)
+	err = handler.service.Delete(r.Context(), currentUserId, friendID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

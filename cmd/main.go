@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
 	"social-network/internal/cache"
@@ -14,13 +15,34 @@ import (
 
 func main() {
 	config := config.InitConfig()
-	db, err := database.InitDatabase(config.GetConnectString())
 
+	masterDB, err := database.InitDatabase(config.GetConnectString(config.DatabaseConfig.Master), database.MasterDb)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Не удалось подключиться к БД Мастер: %v", err)
+	}
+	defer masterDB.Close()
+
+	var replicas []*sql.DB
+
+	replica1DB, err := database.InitDatabase(config.GetConnectString(config.DatabaseConfig.Replica1), database.ReplicaDb)
+	if err != nil {
+		log.Fatalf("%v", config.GetConnectString(config.DatabaseConfig.Replica1))
+		log.Fatalf("Не удалось подключиться к реплике №1: %v", err)
+	} else {
+		replicas = append(replicas, replica1DB)
+		defer replica1DB.Close()
 	}
 
-	defer db.Close()
+	replica2DB, err := database.InitDatabase(config.GetConnectString(config.DatabaseConfig.Replica2), database.ReplicaDb)
+	if err != nil {
+		log.Fatalf("Не удалось подключиться к реплике №2: %v", err)
+	} else {
+		replicas = append(replicas, replica2DB)
+		defer replica2DB.Close()
+	}
+
+	// Роутер баз данных
+	routerDB := database.InitReplicationRouter(masterDB, replicas...)
 
 	err = cache.InitRedis(config)
 
@@ -30,10 +52,10 @@ func main() {
 
 	defer cache.Close()
 
-	userRepository := repository.InitUserRepository(db)
-	profileRepository := repository.InitProfileRepository(db)
-	friendShipRepository := repository.InitFriendShipRepository(db)
-	postRepository := repository.InitPostRepository(db)
+	userRepository := repository.InitUserRepository(routerDB)
+	profileRepository := repository.InitProfileRepository(routerDB)
+	friendShipRepository := repository.InitFriendShipRepository(routerDB)
+	postRepository := repository.InitPostRepository(routerDB)
 
 	// Инициализация кеша ленты
 	feedCache := feed.NewFeedCache()
@@ -44,11 +66,11 @@ func main() {
 	friendShipService := service.InitFriendShipService(userRepository, friendShipRepository, feedService)
 	postService := service.InitPostService(postRepository, userRepository, friendShipRepository, feedService)
 
-	routes := handlers.InitRoutes(config, authService, userService, friendShipService, postService)
+	routes := handlers.InitRoutes(config, authService, userService, friendShipService, postService, routerDB)
 	router := routes.Run()
 
 	server := &http.Server{
-		Addr:    ":" + config.ServerPort,
+		Addr:    ":" + config.ServerConfig.Port,
 		Handler: router,
 	}
 

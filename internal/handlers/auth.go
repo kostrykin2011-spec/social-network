@@ -33,7 +33,7 @@ func (authHandler *authHandler) UserRegister(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	profile, err := authHandler.authService.UserRegister(&request)
+	profile, err := authHandler.authService.UserRegister(r.Context(), &request)
 	if err != nil {
 		models.SendErrorResponse(w, err.Error(), http.StatusNotFound)
 		return
@@ -60,7 +60,7 @@ func (authHandler *authHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := authHandler.authService.Login(request.Id, request.Password)
+	response, err := authHandler.authService.Login(r.Context(), request.Id, request.Password)
 	if err != nil {
 		models.SendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
 		return

@@ -1,31 +1,37 @@
 package repository
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
+	"social-network/pkg/database"
 
 	"github.com/google/uuid"
 )
 
 type FriendShipRepository interface {
-	Add(userId uuid.UUID, friendId uuid.UUID) error
-	Delete(userId uuid.UUID, friendId uuid.UUID) error
-	GetFriendsByUserId(userId uuid.UUID) ([]uuid.UUID, error)
+	Add(ctx context.Context, userId uuid.UUID, friendId uuid.UUID) error
+	Delete(ctx context.Context, userId uuid.UUID, friendId uuid.UUID) error
+	GetFriendsByUserId(ctx context.Context, userId uuid.UUID) ([]uuid.UUID, error)
 }
 
 type friendShipRepository struct {
-	DB *sql.DB
+	routerDB *database.ReplicationRouter
 }
 
-func InitFriendShipRepository(db *sql.DB) FriendShipRepository {
-	return &friendShipRepository{DB: db}
+func InitFriendShipRepository(routerDB *database.ReplicationRouter) FriendShipRepository {
+	return &friendShipRepository{routerDB: routerDB}
 }
 
 // Добавление друга friendId
-func (repository *friendShipRepository) Add(userId uuid.UUID, friendId uuid.UUID) error {
+func (repository *friendShipRepository) Add(ctx context.Context, userId uuid.UUID, friendId uuid.UUID) error {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM friendships WHERE user_id = $1 AND friend_id = $2 OR user_id = $2 AND friend_id = $1)`
-	repository.DB.QueryRow(query, userId, friendId).Scan(&exists)
+	db.QueryRowContext(ctx, query, userId, friendId).Scan(&exists)
 	if exists {
 		return fmt.Errorf("Выбранный пользователь уже есть в списке друзей")
 	}
@@ -33,30 +39,40 @@ func (repository *friendShipRepository) Add(userId uuid.UUID, friendId uuid.UUID
 	id := uuid.New()
 	status := "pending"
 	query = `INSERT INTO friendships (id, user_id, friend_id, status) VALUES ($1, $2, $3, $4) RETURNING created_at`
-	_, err := repository.DB.Exec(query, id, userId, friendId, status)
+	_, err = db.ExecContext(ctx, query, id, userId, friendId, status)
 
 	return err
 }
 
 // Удаление друга friendId
-func (repository *friendShipRepository) Delete(userId uuid.UUID, friendId uuid.UUID) error {
+func (repository *friendShipRepository) Delete(ctx context.Context, userId uuid.UUID, friendId uuid.UUID) error {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM friendships WHERE user_id = $1 AND friend_id = $2 OR user_id = $2 AND friend_id = $1)`
-	repository.DB.QueryRow(query, userId, friendId).Scan(&exists)
+	db.QueryRowContext(ctx, query, userId, friendId).Scan(&exists)
 	if !exists {
 		return fmt.Errorf("В вашем списке друзей нет выбранного пользователя")
 	}
 
 	query = `DELETE FROM friendships WHERE (user_id = $1 AND friend_id = $2 OR user_id = $2 AND friend_id = $1)`
-	_, err := repository.DB.Exec(query, userId, friendId)
+	_, err = db.ExecContext(ctx, query, userId, friendId)
 
 	return err
 }
 
 // Возвращает id-друзей
-func (repository *friendShipRepository) GetFriendsByUserId(userId uuid.UUID) ([]uuid.UUID, error) {
+func (repository *friendShipRepository) GetFriendsByUserId(ctx context.Context, userId uuid.UUID) ([]uuid.UUID, error) {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	query := `SELECT user_id, friend_id FROM friendships WHERE friend_id = $1 OR user_id = $1`
-	rows, err := repository.DB.Query(query, userId)
+	rows, err := db.QueryContext(ctx, query, userId)
 
 	if err != nil {
 		return nil, err

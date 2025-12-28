@@ -33,7 +33,7 @@ func (handler *profileHandler) GetProfile(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	profile, err := handler.profileService.GetById(userId)
+	profile, err := handler.profileService.GetById(r.Context(), userId)
 
 	if err != nil {
 		models.SendSuccessResponse(w, "Анкета не найдена", http.StatusNotFound)
@@ -60,7 +60,7 @@ func (handler *profileHandler) SearchProfile(w http.ResponseWriter, r *http.Requ
 		offset int = 0
 	)
 
-	profiles, err := handler.profileService.SearchProfile(lastName, firstName, limit, offset)
+	profiles, err := handler.profileService.SearchProfile(r.Context(), lastName, firstName, limit, offset)
 
 	if err != nil {
 		models.SendSuccessResponse(w, err.Error(), http.StatusNotFound)

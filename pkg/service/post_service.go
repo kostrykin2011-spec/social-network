@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"social-network/pkg/database"
 	"social-network/pkg/models"
 	"social-network/pkg/repository"
 	"social-network/pkg/utils"
@@ -11,9 +12,9 @@ import (
 )
 
 type PostService interface {
-	AddPost(userId uuid.UUID, postRequest *models.CreatePostRequest) error
-	GetById(postId uuid.UUID) (*models.Post, error)
-	DeletePost(postId, userId uuid.UUID) error
+	AddPost(ctx context.Context, userId uuid.UUID, postRequest *models.CreatePostRequest) error
+	GetById(ctx context.Context, postId uuid.UUID) (*models.Post, error)
+	DeletePost(ctx context.Context, postId, userId uuid.UUID) error
 	GetFeed(ctx context.Context, userId uuid.UUID, limit, offset int) ([]*models.Post, error)
 	GetFeedCount(ctx context.Context, userId uuid.UUID) int64
 }
@@ -31,8 +32,9 @@ func InitPostService(postRepository repository.PostRepository, userRepository re
 }
 
 // Создание поста
-func (service *postService) AddPost(userId uuid.UUID, postRequest *models.CreatePostRequest) error {
-	user, err := service.userRepository.GetUserById(userId)
+func (service *postService) AddPost(ctx context.Context, userId uuid.UUID, postRequest *models.CreatePostRequest) error {
+	ctx = database.WithMaster(ctx)
+	user, err := service.userRepository.GetUserById(ctx, userId)
 	if err != nil {
 		return err
 	}
@@ -55,14 +57,14 @@ func (service *postService) AddPost(userId uuid.UUID, postRequest *models.Create
 		IsPublic: true,
 	}
 
-	err = service.postRepository.AddPost(&post)
+	err = service.postRepository.AddPost(ctx, &post)
 	if err != nil {
 		return err
 	}
 
 	// Добавляем пост в кеш в потоке
 	go func() {
-		err := service.feedService.AddPostToFeed(post.UserId, &post)
+		err := service.feedService.AddPostToFeed(ctx, post.UserId, &post)
 		if err != nil {
 			// Логгируем ошибку добавления поста в кеш
 		}
@@ -72,13 +74,15 @@ func (service *postService) AddPost(userId uuid.UUID, postRequest *models.Create
 }
 
 // Получение поста по Id
-func (service *postService) GetById(postId uuid.UUID) (*models.Post, error) {
-	return service.postRepository.GetById(postId)
+func (service *postService) GetById(ctx context.Context, postId uuid.UUID) (*models.Post, error) {
+	ctx = database.WithReplica(ctx)
+	return service.postRepository.GetById(ctx, postId)
 }
 
 // Удаление поста
-func (service *postService) DeletePost(postId, userId uuid.UUID) error {
-	post, err := service.postRepository.GetById(postId)
+func (service *postService) DeletePost(ctx context.Context, postId, userId uuid.UUID) error {
+	ctx = database.WithMaster(ctx)
+	post, err := service.postRepository.GetById(ctx, postId)
 	if err != nil {
 		return err
 	}
@@ -91,13 +95,13 @@ func (service *postService) DeletePost(postId, userId uuid.UUID) error {
 		return fmt.Errorf("Вы не являетесь автором поста")
 	}
 
-	err = service.postRepository.DeletePost(postId, userId)
+	err = service.postRepository.DeletePost(ctx, postId, userId)
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		err := service.feedService.DeletePostInFeeds(post.UserId, post)
+		err := service.feedService.DeletePostInFeeds(ctx, post.UserId, post)
 		if err != nil {
 			// Логгируем ошибку удаления поста
 		}

@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"social-network/internal/config"
+	"social-network/pkg/database"
 	"social-network/pkg/models"
 	"social-network/pkg/repository"
 	"social-network/pkg/utils"
@@ -12,8 +14,8 @@ import (
 )
 
 type AuthService interface {
-	UserRegister(request *models.RegisterRequest) (*models.Profile, error)
-	Login(userId, password string) (*models.AuthResponse, error)
+	UserRegister(ctx context.Context, request *models.RegisterRequest) (*models.Profile, error)
+	Login(ctx context.Context, userId, password string) (*models.AuthResponse, error)
 }
 
 type authService struct {
@@ -30,7 +32,8 @@ func InitAuthService(config *config.Config, userRepository repository.UserReposi
 	}
 }
 
-func (authService *authService) UserRegister(request *models.RegisterRequest) (*models.Profile, error) {
+func (authService *authService) UserRegister(ctx context.Context, request *models.RegisterRequest) (*models.Profile, error) {
+	ctx = database.WithMaster(ctx)
 	err := utils.ValidateRegisterRequest(request.FirstName, request.LastName, request.Password, request.Gender, request.Biography, request.City)
 	if err != nil {
 		return nil, err
@@ -49,7 +52,7 @@ func (authService *authService) UserRegister(request *models.RegisterRequest) (*
 		return nil, err
 	}
 
-	err = authService.userRepository.Create(&user, pass)
+	err = authService.userRepository.Create(ctx, &user, pass)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +68,7 @@ func (authService *authService) UserRegister(request *models.RegisterRequest) (*
 		City:      request.City,
 	}
 
-	err = authService.profileRepository.Create(&profile)
+	err = authService.profileRepository.Create(ctx, &profile)
 	if err != nil {
 		return nil, err
 	}
@@ -73,13 +76,14 @@ func (authService *authService) UserRegister(request *models.RegisterRequest) (*
 	return &profile, nil
 }
 
-func (authService *authService) Login(userId, password string) (*models.AuthResponse, error) {
+func (authService *authService) Login(ctx context.Context, userId, password string) (*models.AuthResponse, error) {
+	ctx = database.WithReplica(ctx)
 	id, err := uuid.Parse(userId)
 	if err != nil {
 		return nil, fmt.Errorf("Пользователь не зарегистрирован")
 	}
 
-	user, err := authService.userRepository.GetUserById(id)
+	user, err := authService.userRepository.GetUserById(ctx, id)
 
 	if err != nil {
 		return nil, fmt.Errorf("Пользователь не зарегистрирован")

@@ -5,6 +5,7 @@ import (
 	"social-network/internal/cache"
 	"social-network/internal/feed"
 
+	"social-network/pkg/database"
 	"social-network/pkg/models"
 	"social-network/pkg/repository"
 
@@ -13,9 +14,9 @@ import (
 
 type FeedService interface {
 	GetFeed(ctx context.Context, userId uuid.UUID, limit, offset int) ([]*models.Post, error)
-	AddPostToFeed(userId uuid.UUID, post *models.Post) error
-	DeletePostInFeeds(userId uuid.UUID, post *models.Post) error
-	UpdateUserFeedByAddedFriend(userId uuid.UUID, friendId uuid.UUID, isFriend bool) error
+	AddPostToFeed(ctx context.Context, userId uuid.UUID, post *models.Post) error
+	DeletePostInFeeds(ctx context.Context, userId uuid.UUID, post *models.Post) error
+	UpdateUserFeedByAddedFriend(ctx context.Context, userId uuid.UUID, friendId uuid.UUID, isFriend bool) error
 	BuildUserFeed(ctx context.Context, userId uuid.UUID, limit, offset int) error
 	GetFeedCountByUser(ctx context.Context, userId uuid.UUID) int64
 }
@@ -37,6 +38,7 @@ func InitFeedService(feedCache *feed.FeedCache, postRepository repository.PostRe
 
 // Получение ленты постов пользователя userId
 func (feedService *feedService) GetFeed(ctx context.Context, userId uuid.UUID, limit, offset int) ([]*models.Post, error) {
+	ctx = database.WithReplica(ctx)
 	feedKey := cache.FeedKey(userId.String())
 	exists, err := cache.Exists(feedKey)
 	if err != nil {
@@ -61,14 +63,14 @@ func (feedService *feedService) GetFeed(ctx context.Context, userId uuid.UUID, l
 
 	// Если постов недостаточно, то догружаем из БД
 	if countPosts < limit && (countPosts+offset) < 1000 {
-		friendIds, err := feedService.friendShipRepository.GetFriendsByUserId(userId)
+		friendIds, err := feedService.friendShipRepository.GetFriendsByUserId(ctx, userId)
 		if err != nil {
 			return posts, err
 		}
 
 		// Последние посты в базе данных по выбранному пользователю
 		friendIds = append(friendIds, userId)
-		dbPosts, err := feedService.postRepository.GetListByUserIds(friendIds, limit-countPosts, offset+countPosts)
+		dbPosts, err := feedService.postRepository.GetListByUserIds(ctx, friendIds, limit-countPosts, offset+countPosts)
 		if err != nil {
 			return posts, nil
 		}
@@ -96,7 +98,7 @@ func (feedService *feedService) GetFeedCountByUser(ctx context.Context, userId u
 }
 
 // Обновление кеша при добавлении/удалении пользователя (список друзей)
-func (feedService *feedService) UpdateUserFeedByAddedFriend(userId uuid.UUID, friendId uuid.UUID, isFriend bool) error {
+func (feedService *feedService) UpdateUserFeedByAddedFriend(ctx context.Context, userId uuid.UUID, friendId uuid.UUID, isFriend bool) error {
 	err := feedService.feedCache.UpdateUserFeedByAddedFriend(userId, friendId, isFriend)
 	if err != nil {
 		return err
@@ -113,14 +115,16 @@ func (feedService *feedService) UpdateUserFeedByAddedFriend(userId uuid.UUID, fr
 }
 
 // Добавление поста в ленту автора и в ленты его друзей
-func (feedService *feedService) AddPostToFeed(userId uuid.UUID, post *models.Post) error {
+func (feedService *feedService) AddPostToFeed(ctx context.Context, userId uuid.UUID, post *models.Post) error {
+	ctx = database.WithReplica(ctx)
+
 	err := feedService.feedCache.AddPostIntoUserFeed(userId, post)
 	if err != nil {
 		return err
 	}
 
 	// Получаем список друзей
-	friendIds, err := feedService.friendShipRepository.GetFriendsByUserId(userId)
+	friendIds, err := feedService.friendShipRepository.GetFriendsByUserId(ctx, userId)
 	if err != nil {
 		return err
 	}
@@ -139,14 +143,15 @@ func (feedService *feedService) AddPostToFeed(userId uuid.UUID, post *models.Pos
 }
 
 // Удаление поста из ленты автора и лент друзей
-func (feedService *feedService) DeletePostInFeeds(userId uuid.UUID, post *models.Post) error {
+func (feedService *feedService) DeletePostInFeeds(ctx context.Context, userId uuid.UUID, post *models.Post) error {
 	err := feedService.feedCache.DeletePostFromFeed(userId, post)
 	if err != nil {
 		return err
 	}
 
 	// Получаем список друзей
-	friendIds, err := feedService.friendShipRepository.GetFriendsByUserId(userId)
+	ctx = database.WithReplica(ctx)
+	friendIds, err := feedService.friendShipRepository.GetFriendsByUserId(ctx, userId)
 	if err != nil {
 		return err
 	}
@@ -169,14 +174,14 @@ func (feedService *feedService) DeletePostInFeeds(userId uuid.UUID, post *models
 // Строим и кешируем ленту постов
 func (feedService *feedService) BuildUserFeed(ctx context.Context, userId uuid.UUID, limit, offset int) error {
 	// Получаем список друзей
-	friendIds, err := feedService.friendShipRepository.GetFriendsByUserId(userId)
+	friendIds, err := feedService.friendShipRepository.GetFriendsByUserId(ctx, userId)
 	if err != nil {
 		return err
 	}
 
 	// Последние посты в базе данных по выбранному пользователю
 	friendIds = append(friendIds, userId)
-	posts, err := feedService.postRepository.GetListByUserIds(friendIds, limit, offset)
+	posts, err := feedService.postRepository.GetListByUserIds(ctx, friendIds, limit, offset)
 	if err != nil {
 		return err
 	}

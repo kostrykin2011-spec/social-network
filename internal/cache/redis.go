@@ -18,10 +18,10 @@ var (
 
 func InitRedis(config *config.Config) error {
 	redisClient = redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", config.RedisHost, config.RedisPort),
-		Password: config.RedisPassword,
-		DB:       config.RedisDB,
-		PoolSize: config.RedisPoolSize,
+		Addr:     fmt.Sprintf("%s:%d", config.RedisConfig.RedisHost, config.RedisConfig.RedisPort),
+		Password: config.RedisConfig.RedisPassword,
+		DB:       config.RedisConfig.RedisDB,
+		PoolSize: config.RedisConfig.RedisPoolSize,
 	})
 
 	_, err := redisClient.Ping(ctx).Result()

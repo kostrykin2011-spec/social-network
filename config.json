@@ -1,0 +1,37 @@
+{
+  "server": {
+    "port": 8080
+  },
+  "database": {
+    "master": {
+      "host": "postgres",
+      "port": 5432,
+      "user": "postgres",
+      "password": "password",
+      "dbname": "social_network",
+      "sslmode": "disable",
+      "max_conns": 20,
+      "min_conns": 5
+    },
+    "pgslave": {
+      "host": "pgslave",
+      "port": 5432,
+      "user": "postgres",
+      "password": "password",
+      "dbname": "social_network",
+      "sslmode": "disable",
+      "max_conns": 10,
+      "min_conns": 2
+    },
+    "pgasyncslave": {
+      "host": "pgasyncslave",
+      "port": 5432,
+      "user": "postgres",
+      "password": "password",
+      "dbname": "social_network",
+      "sslmode": "disable",
+      "max_conns": 10,
+      "min_conns": 2
+    }
+  }
+}

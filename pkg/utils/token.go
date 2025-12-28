@@ -28,14 +28,14 @@ func GenerateToken(userID uuid.UUID, cfg *config.Config) (string, error) {
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	return token.SignedString([]byte(cfg.JwtSecret))
+	return token.SignedString([]byte(cfg.ServerConfig.JwtSecret))
 }
 
 func ValidateToken(tokenString string, cfg *config.Config) (*Claims, error) {
 	claims := &Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(cfg.JwtSecret), nil
+		return []byte(cfg.ServerConfig.JwtSecret), nil
 	})
 
 	if err != nil {

@@ -45,7 +45,7 @@ func (handler *postHandler) AddPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = handler.postService.AddPost(currentUserId, &postRequest)
+	err = handler.postService.AddPost(r.Context(), currentUserId, &postRequest)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
@@ -69,7 +69,7 @@ func (handler *postHandler) GetPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var post *models.Post
-	post, err = handler.postService.GetById(postId)
+	post, err = handler.postService.GetById(r.Context(), postId)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -105,7 +105,7 @@ func (handler *postHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = handler.postService.DeletePost(postId, currentUserId)
+	err = handler.postService.DeletePost(r.Context(), postId, currentUserId)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

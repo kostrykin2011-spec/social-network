@@ -1,8 +1,9 @@
 package repository
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
+	"social-network/pkg/database"
 	"social-network/pkg/models"
 	"strconv"
 	"strings"
@@ -12,26 +13,31 @@ import (
 )
 
 type PostRepository interface {
-	AddPost(post *models.Post) error
-	GetById(postId uuid.UUID) (*models.Post, error)
-	DeletePost(postId, userId uuid.UUID) error
-	GetListByUserId(userId uuid.UUID, limit, offset int) ([]*models.Post, error)
-	GetListByUserIds(userIds []uuid.UUID, limit, offset int) ([]*models.Post, error)
+	AddPost(ctx context.Context, post *models.Post) error
+	GetById(ctx context.Context, postId uuid.UUID) (*models.Post, error)
+	DeletePost(ctx context.Context, postId, userId uuid.UUID) error
+	GetListByUserId(ctx context.Context, userId uuid.UUID, limit, offset int) ([]*models.Post, error)
+	GetListByUserIds(ctx context.Context, userIds []uuid.UUID, limit, offset int) ([]*models.Post, error)
 }
 
 type postRepository struct {
-	DB *sql.DB
+	routerDB *database.ReplicationRouter
 }
 
-func InitPostRepository(db *sql.DB) PostRepository {
-	return &postRepository{DB: db}
+func InitPostRepository(routerDB *database.ReplicationRouter) PostRepository {
+	return &postRepository{routerDB: routerDB}
 }
 
-func (repository *postRepository) AddPost(post *models.Post) error {
+func (repository *postRepository) AddPost(ctx context.Context, post *models.Post) error {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
 	var createdAt string
 	query := `INSERT INTO posts (id, user_id, title, content, is_public) VALUES ($1, $2, $3, $4, $5) RETURNING created_at`
 
-	err := repository.DB.QueryRow(query,
+	err = db.QueryRowContext(ctx, query,
 		&post.Id,
 		&post.UserId,
 		&post.Title,
@@ -47,10 +53,15 @@ func (repository *postRepository) AddPost(post *models.Post) error {
 	return nil
 }
 
-func (repository *postRepository) DeletePost(postId, userId uuid.UUID) error {
+func (repository *postRepository) DeletePost(ctx context.Context, postId, userId uuid.UUID) error {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM posts WHERE id = $1 AND user_id = $2)`
-	err := repository.DB.QueryRow(query, postId, userId).Scan(&exists)
+	err = db.QueryRowContext(ctx, query, postId, userId).Scan(&exists)
 	if err != nil {
 		return err
 	}
@@ -60,15 +71,20 @@ func (repository *postRepository) DeletePost(postId, userId uuid.UUID) error {
 	}
 
 	query = `DELETE FROM posts WHERE id = $1`
-	_, err = repository.DB.Exec(query, postId)
+	_, err = db.ExecContext(ctx, query, postId)
 
 	return err
 }
 
-func (repository *postRepository) GetById(postId uuid.UUID) (*models.Post, error) {
+func (repository *postRepository) GetById(ctx context.Context, postId uuid.UUID) (*models.Post, error) {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var post models.Post
 	query := `SELECT id, user_id, title, content, is_public, created_at FROM posts WHERE id = $1`
-	err := repository.DB.QueryRow(query, postId).Scan(
+	err = db.QueryRowContext(ctx, query, postId).Scan(
 		&post.Id,
 		&post.UserId,
 		&post.Title,
@@ -85,9 +101,14 @@ func (repository *postRepository) GetById(postId uuid.UUID) (*models.Post, error
 }
 
 // Получить все посты определенного пользователя
-func (repository *postRepository) GetListByUserId(userId uuid.UUID, limit, offset int) ([]*models.Post, error) {
+func (repository *postRepository) GetListByUserId(ctx context.Context, userId uuid.UUID, limit, offset int) ([]*models.Post, error) {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	query := `SELECT id, user_id, title, content, is_public, created_at FROM posts WHERE user_id = $1 ORDER BY created_at DESC limit $2 OFFSET $3`
-	rows, err := repository.DB.Query(query, userId, limit, offset)
+	rows, err := db.QueryContext(ctx, query, userId, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +130,12 @@ func (repository *postRepository) GetListByUserId(userId uuid.UUID, limit, offse
 	return posts, nil
 }
 
-func (repository *postRepository) GetListByUserIds(userIds []uuid.UUID, limit, offset int) ([]*models.Post, error) {
+func (repository *postRepository) GetListByUserIds(ctx context.Context, userIds []uuid.UUID, limit, offset int) ([]*models.Post, error) {
+	db, err := repository.routerDB.GetDatabase(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	placeholders := make([]string, len(userIds))
 	args := make([]interface{}, len(userIds))
 
@@ -125,7 +151,7 @@ func (repository *postRepository) GetListByUserIds(userIds []uuid.UUID, limit, o
 		strconv.Itoa(limit),
 	)
 
-	rows, err := repository.DB.Query(query, args...)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
