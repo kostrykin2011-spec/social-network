@@ -77,7 +77,7 @@ func (authService *authService) UserRegister(ctx context.Context, request *model
 }
 
 func (authService *authService) Login(ctx context.Context, userId, password string) (*models.AuthResponse, error) {
-	ctx = database.WithReplica(ctx)
+	ctx = database.WithMaster(ctx)
 	id, err := uuid.Parse(userId)
 	if err != nil {
 		return nil, fmt.Errorf("Пользователь не зарегистрирован")

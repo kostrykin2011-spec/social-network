@@ -62,7 +62,7 @@ func (authHandler *authHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	response, err := authHandler.authService.Login(r.Context(), request.Id, request.Password)
 	if err != nil {
-		models.SendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
+		models.SendErrorResponse(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
