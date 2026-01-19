@@ -139,7 +139,7 @@ services:
     container_name: chat-service
     restart: unless-stopped
     ports:
-      - "15001:5001"
+      - "15001:8080"
     networks:
       - social-network
     depends_on:
@@ -154,7 +154,7 @@ services:
       CITUS_USER: postgres
       CITUS_PASSWORD: citus_password
       APP_HOST: app
-      APP_PORT: 5001
+      APP_PORT: 8080
     volumes:
       - ./users.csv:/app/users.csv
 
