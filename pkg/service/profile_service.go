@@ -24,7 +24,7 @@ func InitProfileService(profileRepository repository.ProfileRepository) ProfileS
 }
 
 func (service *profileService) GetById(ctx context.Context, userId uuid.UUID) (*models.Profile, error) {
-	ctx = database.WithReplica(ctx)
+	ctx = database.WithMaster(ctx)
 
 	return service.repository.GetByUserId(ctx, userId)
 }
@@ -33,7 +33,7 @@ func (service *profileService) SearchProfile(ctx context.Context, firstName, las
 		return nil, fmt.Errorf("Не переданы обязательные параметры")
 	}
 
-	ctx = database.WithReplica(ctx)
+	ctx = database.WithMaster(ctx)
 
 	return service.repository.SearchProfiles(ctx, firstName, lastName, limit, offset)
 }

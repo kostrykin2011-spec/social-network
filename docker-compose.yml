@@ -55,6 +55,69 @@ services:
     networks:
       - social-network
 
+  rabbitmq-1:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq-1
+    ports:
+      - "5674:5672"
+      - "15674:15672"
+    environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq-1
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ERLANG_COOKIE: "7e8132a2-70eb-4f5d-a074-a96d476bdcb6"
+    volumes:
+      - rabbitmq_data_1:/var/lib/rabbitmq
+    networks:
+      - social-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  rabbitmq-2:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq-2
+    ports:
+      - "5675:5672"
+      - "15675:15672"
+    environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq-2
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ERLANG_COOKIE: "7e8132a2-70eb-4f5d-a074-a96d476bdcb6"
+    volumes:
+      - rabbitmq_data_2:/var/lib/rabbitmq
+    networks:
+      - social-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  rabbitmq-3:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq-3
+    ports:
+      - "5676:5672"
+      - "15676:15672"
+    environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq-3
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ERLANG_COOKIE: "7e8132a2-70eb-4f5d-a074-a96d476bdcb6"
+    volumes:
+      - rabbitmq_data_3:/var/lib/rabbitmq
+    networks:
+      - social-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
   app:
     build: .
     container_name: social-network-app
@@ -65,14 +128,37 @@ services:
     working_dir: /app
     environment:
       - CSV_PEOPLE_PATH=/app/people.csv
-      - CSV_USER_PATH=/app/users.csv
+      - CSV_POSTS_PATH=/app/posts.txt
+
     ports:
-      - "8080:8080"
+      - "5001:5001"
     networks:
       - social-network
     depends_on:
       - postgres
       - redis
+  ws-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.websocket
+    container_name: social-network-ws-1
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_NAME=social_network
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+    networks:
+      - social-network
+    ports:
+      - "8082:8082"
+    depends_on:
+      - app
+    restart: unless-stopped
   citus-coordinator:
     image: citusdata/citus:12.1.3
     container_name: citus-coordinator
@@ -139,7 +225,7 @@ services:
     container_name: chat-service
     restart: unless-stopped
     ports:
-      - "15001:8080"
+      - "15001:5001"
     networks:
       - social-network
     depends_on:
@@ -154,7 +240,7 @@ services:
       CITUS_USER: postgres
       CITUS_PASSWORD: citus_password
       APP_HOST: app
-      APP_PORT: 8080
+      APP_PORT: 5001
     volumes:
       - ./users.csv:/app/users.csv
 
@@ -167,6 +253,12 @@ volumes:
     driver: local
   redis_data:
     driver: local
+  rabbitmq_data_1:
+   driver: local
+  rabbitmq_data_2:
+   driver: local
+  rabbitmq_data_3:
+   driver: local
   go-mod-cache:
     driver: local
   citus_coordinator_data:

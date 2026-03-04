@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
+	"social-network/internal/queue"
 	"social-network/pkg/database"
 	"social-network/pkg/models"
 	"social-network/pkg/repository"
 	"social-network/pkg/utils"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -24,16 +27,23 @@ type postService struct {
 	userRepository       repository.UserRepository
 	friendShipRepository repository.FriendShipRepository
 	feedService          FeedService
+	rabbitMQClient       *queue.RabbitMQClient
 }
 
 // Инициализация сервиса постов
-func InitPostService(postRepository repository.PostRepository, userRepository repository.UserRepository, friendShipRepository repository.FriendShipRepository, feedService FeedService) PostService {
-	return &postService{postRepository: postRepository, userRepository: userRepository, feedService: feedService}
+func InitPostService(postRepository repository.PostRepository, userRepository repository.UserRepository, friendShipRepository repository.FriendShipRepository, feedService FeedService, rabbitMQClient *queue.RabbitMQClient) PostService {
+	return &postService{postRepository: postRepository, userRepository: userRepository, feedService: feedService, rabbitMQClient: rabbitMQClient}
 }
 
 // Создание поста
 func (service *postService) AddPost(ctx context.Context, userId uuid.UUID, postRequest *models.CreatePostRequest) error {
 	ctx = database.WithMaster(ctx)
+	// Валидируем данные по посту
+	err := utils.ValidatePostRequest(postRequest.Title, postRequest.Content)
+	if err != nil {
+		return err
+	}
+
 	user, err := service.userRepository.GetUserById(ctx, userId)
 	if err != nil {
 		return err
@@ -43,13 +53,7 @@ func (service *postService) AddPost(ctx context.Context, userId uuid.UUID, postR
 		return fmt.Errorf("Пользователь не найден")
 	}
 
-	// Валидируем данные по посту
-	err = utils.ValidatePostRequest(postRequest.Title, postRequest.Content)
-	if err != nil {
-		return err
-	}
-
-	var post models.Post = models.Post{
+	post := models.Post{
 		Id:       uuid.New(),
 		UserId:   userId,
 		Title:    postRequest.Title,
@@ -57,25 +61,36 @@ func (service *postService) AddPost(ctx context.Context, userId uuid.UUID, postR
 		IsPublic: true,
 	}
 
+	// Добавляем пост в БД
 	err = service.postRepository.AddPost(ctx, &post)
 	if err != nil {
 		return err
 	}
 
-	// Добавляем пост в кеш в потоке
-	go func() {
-		err := service.feedService.AddPostToFeed(ctx, post.UserId, &post)
-		if err != nil {
-			// Логгируем ошибку добавления поста в кеш
+	// Отправляем в RabbitMQ
+	if service.rabbitMQClient == nil {
+	} else {
+		task := &queue.FeedTask{
+			PostID:    post.Id,
+			UserID:    post.UserId,
+			CreatedAt: post.CreatedAt,
 		}
-	}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		err := service.rabbitMQClient.PublishFeedTask(ctx, task)
+		if err != nil {
+			log.Printf("Не удалось опубликовать: %v", err)
+		}
+	}
 
 	return nil
 }
 
 // Получение поста по Id
 func (service *postService) GetById(ctx context.Context, postId uuid.UUID) (*models.Post, error) {
-	ctx = database.WithReplica(ctx)
+	ctx = database.WithMaster(ctx)
 	return service.postRepository.GetById(ctx, postId)
 }
 

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Лента постов</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .log { background: #f5f5f5; padding: 10px; height: 300px; overflow: auto; font-family: monospace; }
+        .connected { color: green; }
+        .message { color: blue; }
+        .error { color: red; }
+        button { margin: 5px; padding: 10px; }
+        input { padding: 8px; width: 400px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h2>Лента постов</h2>
+    
+    <div>
+        <input type="text" id="userId" value="" placeholder="User ID">
+        <button onclick="connect()">Подключиться</button>
+        <button onclick="disconnect()">Отключиться</button>
+    </div>
+    
+    <div>
+        <label>Статус: <span id="status">Не подключен</span></label>
+    </div>
+    
+    <div class="log" id="log"></div>
+
+    <script>
+        let socket = null;
+        let messageCount = 0;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            let color = 'black';
+            
+            if (type === 'connected') color = 'green';
+            if (type === 'error') color = 'red';
+            if (type === 'message') color = 'blue';
+            if (type === 'warning') color = 'orange';
+            
+            logDiv.innerHTML += `<div style="color: ${color}">[${time}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function connect() {
+            const userId = document.getElementById('userId').value;
+            
+            if (!userId) {
+                alert('Введите user_id');
+                return;
+            }
+            
+            const wsUrl = `ws://localhost:8082/ws/feed?user_id=${userId}`;
+            try {
+                socket = new WebSocket(wsUrl);
+                
+                socket.onopen = function() {
+                    document.getElementById('status').innerHTML = 'Подключен';
+                    document.getElementById('status').style.color = 'green';
+                    messageCount = 0;
+                };
+                
+                socket.onmessage = function(event) {
+                    messageCount++;
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`[${messageCount}] Получено: ${JSON.stringify(data, null, 2)}`, 'message');
+                        
+                        if (data.event_type === '/post/feed/posted') {
+                            log(`${data.text.substring(0, 50)}...`, 'message');
+                        }
+                    } catch (e) {
+                    }
+                };
+                
+                socket.onclose = function(event) {
+                    document.getElementById('status').innerHTML = `Отключен (код: ${event.code})`;
+                    document.getElementById('status').style.color = 'red';
+                };
+                
+                socket.onerror = function(error) {
+                    log(`Ошибка: ${JSON.stringify(error)}`, 'error');
+                };
+                
+            } catch (e) {
+                log(`Исключение: ${e.message}`, 'error');
+            }
+        }
+        
+        function disconnect() {
+            if (socket) {
+                socket.close(1000, 'Закрыто пользователем');
+                socket = null;
+            }
+        }
+        
+        // Проверяем поддержку WebSocket
+        if (!window.WebSocket) {
+        }
+    </script>
+</body>
+</html>

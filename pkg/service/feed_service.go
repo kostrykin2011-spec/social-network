@@ -4,6 +4,8 @@ import (
 	"context"
 	"social-network/internal/cache"
 	"social-network/internal/feed"
+	"social-network/internal/queue"
+	"time"
 
 	"social-network/pkg/database"
 	"social-network/pkg/models"
@@ -25,20 +27,22 @@ type feedService struct {
 	feedCache            feed.FeedCache
 	postRepository       repository.PostRepository
 	friendShipRepository repository.FriendShipRepository
+	rabbitMQ             *queue.RabbitMQClient
 }
 
 // Инициализация сервиса по работе с лентами
-func InitFeedService(feedCache *feed.FeedCache, postRepository repository.PostRepository, friendShipRepository repository.FriendShipRepository) FeedService {
+func InitFeedService(feedCache *feed.FeedCache, postRepository repository.PostRepository, friendShipRepository repository.FriendShipRepository, rabbitMQ *queue.RabbitMQClient) FeedService {
 	return &feedService{
 		feedCache:            *feedCache,
 		postRepository:       postRepository,
 		friendShipRepository: friendShipRepository,
+		rabbitMQ:             rabbitMQ,
 	}
 }
 
 // Получение ленты постов пользователя userId
 func (feedService *feedService) GetFeed(ctx context.Context, userId uuid.UUID, limit, offset int) ([]*models.Post, error) {
-	ctx = database.WithReplica(ctx)
+	ctx = database.WithMaster(ctx)
 	feedKey := cache.FeedKey(userId.String())
 	exists, err := cache.Exists(feedKey)
 	if err != nil {
@@ -116,7 +120,7 @@ func (feedService *feedService) UpdateUserFeedByAddedFriend(ctx context.Context,
 
 // Добавление поста в ленту автора и в ленты его друзей
 func (feedService *feedService) AddPostToFeed(ctx context.Context, userId uuid.UUID, post *models.Post) error {
-	ctx = database.WithReplica(ctx)
+	ctx = database.WithMaster(ctx)
 
 	err := feedService.feedCache.AddPostIntoUserFeed(userId, post)
 	if err != nil {
@@ -129,14 +133,27 @@ func (feedService *feedService) AddPostToFeed(ctx context.Context, userId uuid.U
 		return err
 	}
 
-	if len(friendIds) <= 0 {
-		return nil
+	if len(friendIds) > 0 {
+		// Добавляем пост в ленты друзей
+		err = feedService.feedCache.AddPostToFriendFeeds(userId, post, friendIds)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Добавляем пост в ленты друзей
-	err = feedService.feedCache.AddPostToFriendFeeds(userId, post, friendIds)
-	if err != nil {
-		return err
+	event := &models.PostFeedEvent{
+		EventType: "/post/feed/posted",
+		PostID:    post.Id,
+		UserID:    post.UserId,
+		Text:      post.Content,
+	}
+
+	// Рассылаем (активным) друзьям события о новом посте
+	allUsers := append(friendIds, userId)
+	for _, id := range allUsers {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		err = feedService.rabbitMQ.PublishEventToUser(ctx, event, id)
+		cancel()
 	}
 
 	return nil

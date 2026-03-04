@@ -16,6 +16,7 @@ type Routes struct {
 	PostHandler       PostHandler
 	GenerateHandler   GenerateHandler
 	TestHandler       TestHandler
+	WebsocketHandler  *WebSocketHandler
 }
 
 func InitRoutes(config *config.Config, authService service.AuthService, profileService service.ProfileService, friendfiendShipService service.FriendShipService, postService service.PostService, routerDB *database.ReplicationRouter) *Routes {
@@ -25,7 +26,7 @@ func InitRoutes(config *config.Config, authService service.AuthService, profileS
 		AuthHandler:       InitAuthHandler(authService),
 		FriendShipHandler: InitFriendShipHandler(friendfiendShipService),
 		PostHandler:       InitPostHandler(postService),
-		GenerateHandler:   InitGenerateHandler(authService, friendfiendShipService, postService),
+		GenerateHandler:   InitGenerateHandler(routerDB, authService, friendfiendShipService, postService),
 		TestHandler:       InitTestHandler(routerDB),
 	}
 }
@@ -43,9 +44,7 @@ func (route *Routes) Run() *mux.Router {
 	router.HandleFunc("/post/delete/{id}", AuthMiddleware(route.config, route.PostHandler.DeletePost)).Methods("PUT")
 	router.HandleFunc("/post/feed", AuthMiddleware(route.config, route.PostHandler.GetFeed)).Methods("GET")
 	router.HandleFunc("/post/feed/count", AuthMiddleware(route.config, route.PostHandler.GetFeedCount)).Methods("GET")
-	router.HandleFunc("/generate/data", route.GenerateHandler.GenerateData).Methods("GET")
-	router.HandleFunc("/test/create", route.TestHandler.AddRecord).Methods("POST")
-	router.HandleFunc("/test/get", route.TestHandler.GetRecord).Methods("GET")
-	router.HandleFunc("/generate/data", route.GenerateHandler.GenerateData).Methods("GET")
+	router.HandleFunc("/generate/users", route.GenerateHandler.GenerateUsers).Methods("GET")
+
 	return router
 }

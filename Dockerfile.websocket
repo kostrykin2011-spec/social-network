@@ -1,0 +1,25 @@
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+COPY *.go ./
+RUN go mod tidy
+
+COPY . .
+RUN go build -o websocket cmd/ws/main.go
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+COPY --from=builder /app/websocket .
+
+# Копируем папку frontend
+COPY --from=builder /app/frontend ./frontend
+
+EXPOSE 8082
+
+CMD ["./websocket"]

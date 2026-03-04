@@ -26,7 +26,7 @@ type Config struct {
 func InitConfig() *Config {
 	return &Config{
 		ServerConfig: ServerConfig{
-			Port:      getEnv("SERVER_PORT", "8080"),
+			Port:      getEnv("SERVER_PORT", "5001"),
 			JwtSecret: getEnv("JWT_SECRET", "ef3e2915c7dab47da1946ef3e2915c7dab47da1946712b4d739668d712b4d739668d"),
 		},
 		DBConfig: DBConfig{

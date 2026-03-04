@@ -20,17 +20,17 @@ func InitDatabase(connStr string) (*sql.DB, error) {
 		return nil, fmt.Errorf("База данных не доступна: %v", err)
 	}
 
-	// Создание таблиц
-	err = createTables(db)
-	if err != nil {
-		return nil, fmt.Errorf("Не удалось создать таблицы: %w", err)
-	}
+	// // Создание таблиц
+	// err = createTables(db)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Не удалось создать таблицы: %w", err)
+	// }
 
-	// Создание индексов
-	err = CreateIndexes(db)
-	if err != nil {
-		return nil, fmt.Errorf("Не удалось создать индексы: %w", err)
-	}
+	// // Создание индексов
+	// err = CreateIndexes(db)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Не удалось создать индексы: %w", err)
+	// }
 
 	// Настройка пула соединений
 	db.SetMaxOpenConns(25)

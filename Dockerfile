@@ -18,7 +18,7 @@ RUN go mod tidy
 COPY . .
 
 # Собираем приложение
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api
 
 # Финальный образ
 FROM alpine:latest
@@ -42,7 +42,7 @@ RUN chown -R app:app /app
 USER app
 
 # Экспортируем порт
-EXPOSE 8080
+EXPOSE 5001
 
 # Запускаем приложение
 CMD ["./main"]

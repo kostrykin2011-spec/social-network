@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
@@ -8,6 +9,8 @@ import (
 	"social-network/internal/config"
 	"social-network/internal/feed"
 	"social-network/internal/handlers"
+	"social-network/internal/queue"
+	"social-network/internal/worker"
 	"social-network/pkg/database"
 	"social-network/pkg/repository"
 	"social-network/pkg/service"
@@ -16,7 +19,7 @@ import (
 func main() {
 	config := config.InitConfig()
 
-	masterDB, err := database.InitDatabase(config.GetConnectString(config.DatabaseConfig.Master), database.MasterDb)
+	masterDB, err := database.InitDatabase(config.GetConnectDBString(config.DatabaseConfig.Master), database.MasterDb)
 	if err != nil {
 		log.Fatalf("Не удалось подключиться к БД Мастер: %v", err)
 	}
@@ -24,16 +27,16 @@ func main() {
 
 	var replicas []*sql.DB
 
-	replica1DB, err := database.InitDatabase(config.GetConnectString(config.DatabaseConfig.Replica1), database.ReplicaDb)
+	replica1DB, err := database.InitDatabase(config.GetConnectDBString(config.DatabaseConfig.Replica1), database.ReplicaDb)
 	if err != nil {
-		log.Fatalf("%v", config.GetConnectString(config.DatabaseConfig.Replica1))
+		log.Fatalf("%v", config.GetConnectDBString(config.DatabaseConfig.Replica1))
 		log.Fatalf("Не удалось подключиться к реплике №1: %v", err)
 	} else {
 		replicas = append(replicas, replica1DB)
 		defer replica1DB.Close()
 	}
 
-	replica2DB, err := database.InitDatabase(config.GetConnectString(config.DatabaseConfig.Replica2), database.ReplicaDb)
+	replica2DB, err := database.InitDatabase(config.GetConnectDBString(config.DatabaseConfig.Replica2), database.ReplicaDb)
 	if err != nil {
 		log.Fatalf("Не удалось подключиться к реплике №2: %v", err)
 	} else {
@@ -43,6 +46,16 @@ func main() {
 
 	// Роутер баз данных
 	routerDB := database.InitReplicationRouter(masterDB, replicas...)
+
+	rabbitMQ, err := queue.InitRabbitMQClient(config)
+	if err != nil {
+		log.Fatalf("Не удалось инициализировать RabbitMQ: %v", err)
+	}
+	defer rabbitMQ.Close()
+
+	if err := rabbitMQ.CreateTaskQueue("feed_tasks"); err != nil {
+		log.Fatal("Не удалось создать очередь для задач:", err)
+	}
 
 	err = cache.InitRedis(config)
 
@@ -59,12 +72,23 @@ func main() {
 
 	// Инициализация кеша ленты
 	feedCache := feed.NewFeedCache()
-	feedService := service.InitFeedService(feedCache, postRepository, friendShipRepository)
+	feedService := service.InitFeedService(feedCache, postRepository, friendShipRepository, rabbitMQ)
 
 	authService := service.InitAuthService(config, userRepository, profileRepository)
 	userService := service.InitProfileService(profileRepository)
 	friendShipService := service.InitFriendShipService(userRepository, friendShipRepository, feedService)
-	postService := service.InitPostService(postRepository, userRepository, friendShipRepository, feedService)
+	postService := service.InitPostService(postRepository, userRepository, friendShipRepository, feedService, rabbitMQ)
+
+	// Воркер для обработки задач
+	feedWorker := worker.NewFeedWorker(postRepository, feedService, rabbitMQ, "feed_tasks")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := feedWorker.Start(ctx); err != nil {
+			log.Printf("Ошибка в воркере: %v", err)
+		}
+	}()
 
 	routes := handlers.InitRoutes(config, authService, userService, friendShipService, postService, routerDB)
 	router := routes.Run()

@@ -32,7 +32,7 @@ func (service *friendShipService) AddFiend(ctx context.Context, userId uuid.UUID
 		return fmt.Errorf("Вы не можете добавлять себя в друзья")
 	}
 
-	ctx = database.WithReplica(ctx)
+	ctx = database.WithMaster(ctx)
 	friend, err := service.userRepository.GetUserById(ctx, friendId)
 	if err != nil {
 		return err
@@ -81,6 +81,6 @@ func (service *friendShipService) Delete(ctx context.Context, userId uuid.UUID, 
 
 // Список друзей
 func (service *friendShipService) GetFriendsByUserId(ctx context.Context, userId uuid.UUID) ([]uuid.UUID, error) {
-	ctx = database.WithReplica(ctx)
+	ctx = database.WithMaster(ctx)
 	return service.friendRepository.GetFriendsByUserId(ctx, userId)
 }
