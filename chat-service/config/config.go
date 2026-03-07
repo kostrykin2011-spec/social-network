@@ -24,6 +24,7 @@ type Config struct {
 }
 
 func InitConfig() *Config {
+
 	return &Config{
 		ServerConfig: ServerConfig{
 			Port:      getEnv("SERVER_PORT", "5001"),

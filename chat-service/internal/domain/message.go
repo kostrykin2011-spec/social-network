@@ -26,3 +26,7 @@ type MessageResponse struct {
 	RecipientId uuid.UUID `json:"recipient_id"`
 	Content     string    `json:"content"`
 }
+
+type RedisMessageResponse struct {
+	Content string `json:"content"`
+}

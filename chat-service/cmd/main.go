@@ -2,32 +2,32 @@ package main
 
 import (
 	"chat-service/config"
+	"chat-service/internal/cache"
 	"chat-service/internal/handlers"
-	"chat-service/internal/repository"
+	"chat-service/internal/helpers"
 	"chat-service/internal/services"
-	"chat-service/pkg/database"
+	"encoding/csv"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 )
 
 func main() {
 	config := config.InitConfig()
-
-	db, err := database.InitDatabase(config.GetConnectString(config.DBConfig))
-	if err != nil {
-		log.Fatalf("Не удалось подключиться к БД: %v", err)
-	}
-	defer db.Close()
-
-	messageRepository := repository.InitMessageRepository(db)
-	dialogRepository := repository.InitDialogRepository(db)
-
-	messageService := services.InitMessageService(dialogRepository, messageRepository)
+	rdb := cache.InitRedis()
+	defer rdb.Close()
+	// Проверка соединения
+	messageService := services.InitRedisMessageService(rdb)
 
 	routes := handlers.InitRoutes(messageService)
 	router := routes.Run()
+
+	// Загружаем тестовые данные
+	//loadTestData()
 
 	server := &http.Server{
 		Addr:    ":" + config.ServerConfig.Port,
@@ -40,27 +40,27 @@ func main() {
 }
 
 func loadTestData() {
-	// filePath := "/app/users.csv"
-	// if filePath == "" {
-	// 	fmt.Println("Файл people.csv не найден")
-	// }
+	filePath := "/app/users.csv"
+	if filePath == "" {
+		fmt.Println("Файл users.csv не найден")
+	}
 
-	// file, err := os.Open(filePath)
-	// if err != nil {
-	// 	fmt.Println("Ошибка при открытии файла:", err)
-	// }
+	file, err := os.Open(filePath)
+	if err != nil {
+		fmt.Println("Ошибка при открытии файла:", err)
+	}
 
-	// defer file.Close()
+	defer file.Close()
 
-	// reader := csv.NewReader(file)
-	// records, err := reader.ReadAll()
-	// if err != nil {
-	// 	fmt.Println("Ошибка при чтении CSV:", err)
-	// }
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		fmt.Println("Ошибка при чтении CSV:", err)
+	}
 
-	// globalUUIDCache := helpers.Instance()
-	// for _, record := range records {
-	// 	userId, _ := uuid.Parse(record[0])
-	// 	globalUUIDCache.Add(userId)
-	// }
+	globalUUIDCache := helpers.Instance()
+	for _, record := range records {
+		userId, _ := uuid.Parse(record[0])
+		globalUUIDCache.Add(userId)
+	}
 }

@@ -7,19 +7,19 @@ import (
 )
 
 type Routes struct {
-	MessageHandler MessageHandler
+	MessageHandler RedisMessageHandler
 }
 
-func InitRoutes(messageService services.MessageService) *Routes {
+func InitRoutes(messageService *services.RedisMessageService) *Routes {
 	return &Routes{
-		MessageHandler: InitMessageHanler(messageService),
+		MessageHandler: InitRedisMessageHanler(messageService),
 	}
 }
 
 func (route *Routes) Run() *mux.Router {
 	router := mux.NewRouter()
-	router.HandleFunc("/dialog/{user_id}/send", route.MessageHandler.Send).Methods("POST")
-	router.HandleFunc("/dialog/{user_id}/list", route.MessageHandler.GetMessages).Methods("GET")
+	router.HandleFunc("/dialog/{user_id}/send", route.MessageHandler.SendMessage).Methods("POST")
+	router.HandleFunc("/dialog/{user_id}/list", route.MessageHandler.GetMessagesByUser).Methods("GET")
 
 	return router
 }
