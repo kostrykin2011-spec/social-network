@@ -4,8 +4,9 @@ FROM golang:1.24-alpine AS builder
 # Создаем рабочую директорию
 WORKDIR /app
 
-# Копируем файлы
+COPY go.work ./ 
 COPY go.mod go.sum ./
+COPY chat-service/go.mod chat-service/go.sum ./chat-service/
 
 # Скачиваем зависимости
 RUN go mod tidy
@@ -14,7 +15,7 @@ RUN go mod tidy
 COPY . .
 
 # Собираем приложение
-RUN CGO_ENABLED=0 GOOS=linux go build -o chat-service ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/chat-server-bin ./chat-service/cmd
 
 # Финальный образ
 FROM alpine:latest
@@ -24,9 +25,9 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 
 # Копируем бинарник из builder stage
-COPY --from=builder /app/chat-service .
+COPY --from=builder /app/chat-server-bin .
 
-COPY --from=builder /app/config ./config
+COPY --from=builder /app/chat-service/config ./config
 
 RUN addgroup -g 1001 -S appuser && \
     adduser -u 1001 -S appuser -G appuser
@@ -38,4 +39,4 @@ USER appuser
 EXPOSE 5001
 
 # Запускаем приложение
-CMD ["./chat-service"]
+CMD ["./chat-server-bin"]

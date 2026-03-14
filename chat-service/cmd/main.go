@@ -3,39 +3,102 @@ package main
 import (
 	"chat-service/config"
 	"chat-service/internal/cache"
-	"chat-service/internal/handlers"
 	"chat-service/internal/helpers"
+	"chat-service/internal/logger"
 	"chat-service/internal/services"
+	"context"
 	"encoding/csv"
 	"fmt"
-	"log"
-	"net/http"
+	"net"
 	"os"
+	"os/signal"
+	"social-network/pkg/pb/chat"
+	"syscall"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
+	// 1. Создаем логгер
+	log := logger.New(logger.Config{
+		ServiceName: "chat-service",
+		Environment: "development",
+		PrettyPrint: true,
+	})
+
+	log.Info().Msg("Запуск микросервиса диалогов")
+
 	config := config.InitConfig()
+	log.Info().Str("port", config.ServerConfig.Port).Msg("Конфигурация загружена")
+
 	rdb := cache.InitRedis()
 	defer rdb.Close()
-	// Проверка соединения
-	messageService := services.InitRedisMessageService(rdb)
+	log.Info().Msg("Redis подключен")
 
-	routes := handlers.InitRoutes(messageService)
-	router := routes.Run()
+	redisService := services.InitRedisMessageService(rdb)
+	chatService := services.NewChatService(redisService, log)
 
-	// Загружаем тестовые данные
-	//loadTestData()
-
-	server := &http.Server{
-		Addr:    ":" + config.ServerConfig.Port,
-		Handler: router,
+	lis, err := net.Listen("tcp", ":"+config.ServerConfig.Port)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Ошибка запуска TCP")
 	}
 
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Не удалось запустить сервер: %v", err)
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(loggingInterceptor(log)),
+	)
+
+	chat.RegisterChatServiceServer(grpcServer, chatService)
+	reflection.Register(grpcServer)
+
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Info().Str("port", config.ServerConfig.Port).Msg("gRPC сервер запущен")
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatal().Err(err).Msg("Ошибка работы gRPC сервера")
+		}
+	}()
+
+	<-done
+	log.Info().Msg("Получен сигнал завершения")
+
+	grpcServer.GracefulStop()
+	log.Info().Msg("Сервер остановлен")
+}
+
+func loggingInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		var requestID string
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if ids := md.Get("x-request-id"); len(ids) > 0 {
+				requestID = ids[0]
+			}
+		}
+		ctx = logger.SetRequestID(ctx, requestID)
+		log.WithRequestID(requestID).Info().
+			Str("method", info.FullMethod).
+			Msg("gRPC запрос")
+
+		resp, err := handler(ctx, req)
+
+		// Логируем ответ
+		if err != nil {
+			log.WithRequestID(requestID).Error().
+				Err(err).
+				Str("method", info.FullMethod).
+				Msg("gRPC ошибка")
+		} else {
+			log.WithRequestID(requestID).Info().
+				Str("method", info.FullMethod).
+				Msg("gRPC ответ")
+		}
+
+		return resp, err
 	}
 }
 

@@ -221,7 +221,9 @@ services:
       retries: 5
     restart: unless-stopped
   app:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     container_name: social-network-app
     restart: unless-stopped
     volumes:
@@ -231,6 +233,7 @@ services:
     environment:
       - CSV_PEOPLE_PATH=/app/people.csv
       - CSV_POSTS_PATH=/app/posts.txt
+      - CHAT_ADDR=chat-service:5001
 
     ports:
       - "5001:5001"
@@ -263,15 +266,15 @@ services:
     restart: unless-stopped
   chat-service:
     build:
-      context: ./chat-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: chat-service/Dockerfile
     container_name: chat-service
     depends_on:
       redis-cluster-creator:
         condition: service_completed_successfully
     restart: unless-stopped
     ports:
-      - "15001:5001"
+      - "15005:5001"
     networks:
       - social-network
     environment:
