@@ -15,10 +15,10 @@ type FriendShipRepository interface {
 }
 
 type friendShipRepository struct {
-	routerDB *database.ReplicationRouter
+	routerDB *database.DBRouter
 }
 
-func InitFriendShipRepository(routerDB *database.ReplicationRouter) FriendShipRepository {
+func InitFriendShipRepository(routerDB *database.DBRouter) FriendShipRepository {
 	return &friendShipRepository{routerDB: routerDB}
 }
 

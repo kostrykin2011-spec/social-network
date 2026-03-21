@@ -33,7 +33,7 @@ func (service *profileService) SearchProfile(ctx context.Context, firstName, las
 		return nil, fmt.Errorf("Не переданы обязательные параметры")
 	}
 
-	ctx = database.WithMaster(ctx)
+	ctx = database.WithReplica(ctx)
 
 	return service.repository.SearchProfiles(ctx, firstName, lastName, limit, offset)
 }

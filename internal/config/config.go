@@ -20,9 +20,8 @@ type DBConfig struct {
 }
 
 type DatabaseConfig struct {
-	Master   DBConfig
-	Replica1 DBConfig
-	Replica2 DBConfig
+	Master  DBConfig
+	Replica DBConfig
 }
 
 type RedisConfig struct {
@@ -60,22 +59,15 @@ func InitConfig() *Config {
 		},
 		DatabaseConfig: DatabaseConfig{
 			Master: DBConfig{
-				DBHost:     getEnv("DB_HOST", "postgres"),
+				DBHost:     getEnv("DB_HOST", "haproxy"),
 				DBPort:     getEnv("DB_PORT", "5432"),
 				DBUser:     getEnv("DB_USER", "postgres"),
 				DBPassword: getEnv("DB_PASSWORD", "password"),
 				DBName:     getEnv("DB_NAME", "social_network"),
 			},
-			Replica1: DBConfig{
-				DBHost:     getEnv("DB_HOST", "pgslave"),
-				DBPort:     getEnv("DB_PORT", "5432"),
-				DBUser:     getEnv("DB_USER", "postgres"),
-				DBPassword: getEnv("DB_PASSWORD", "password"),
-				DBName:     getEnv("DB_NAME", "social_network"),
-			},
-			Replica2: DBConfig{
-				DBHost:     getEnv("DB_HOST", "pgasyncslave"),
-				DBPort:     getEnv("DB_PORT", "5432"),
+			Replica: DBConfig{
+				DBHost:     getEnv("DB_HOST", "haproxy"),
+				DBPort:     getEnv("DB_REPLICA_PORT", "5433"),
 				DBUser:     getEnv("DB_USER", "postgres"),
 				DBPassword: getEnv("DB_PASSWORD", "password"),
 				DBName:     getEnv("DB_NAME", "social_network"),

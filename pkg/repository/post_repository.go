@@ -21,10 +21,10 @@ type PostRepository interface {
 }
 
 type postRepository struct {
-	routerDB *database.ReplicationRouter
+	routerDB *database.DBRouter
 }
 
-func InitPostRepository(routerDB *database.ReplicationRouter) PostRepository {
+func InitPostRepository(routerDB *database.DBRouter) PostRepository {
 	return &postRepository{routerDB: routerDB}
 }
 

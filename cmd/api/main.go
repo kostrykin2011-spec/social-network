@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"os"
 	"os/signal"
@@ -41,31 +40,17 @@ func main() {
 
 	log.Info().Msg("Подключено к мастер БД")
 
-	var replicas []*sql.DB
-
-	log.Info().Msg("Подключение к реплике 1...")
-	replica1DB, err := database.InitDatabase(config.GetConnectDBString(config.DatabaseConfig.Replica1), database.ReplicaDb)
+	log.Info().Msg("Подключение к репликам")
+	replicaDB, err := database.InitDatabase(config.GetConnectDBString(config.DatabaseConfig.Replica), database.ReplicaDb)
 	if err != nil {
-		log.Error().Err(err).Msg("Не удалось подключиться к реплике №1")
+		log.Error().Err(err).Msg("Не удалось подключиться к репликам")
 	} else {
-		log.Info().Msg("Подключено к реплике 1")
-		replicas = append(replicas, replica1DB)
-		defer replica1DB.Close()
-	}
-
-	log.Info().Msg("Подключение к реплике 2...")
-	replica2DB, err := database.InitDatabase(config.GetConnectDBString(config.DatabaseConfig.Replica2), database.ReplicaDb)
-	if err != nil {
-		log.Error().Err(err).Msg("Не удалось подключиться к реплике №2")
-	} else {
-		log.Info().Msg("Подключено к реплике 2")
-		replicas = append(replicas, replica2DB)
-		defer replica2DB.Close()
+		log.Info().Msg("Подключено к репликам")
+		defer replicaDB.Close()
 	}
 
 	// Роутер баз данных
-	routerDB := database.InitReplicationRouter(masterDB, replicas...)
-	log.Info().Int("replicas", len(replicas)).Msg("Роутер БД инициализирован")
+	routerDB := database.InitDBRouter(masterDB, replicaDB)
 
 	log.Info().Msg("Подключение к RabbitMQ...")
 	rabbitMQ, err := queue.InitRabbitMQClient(config)
@@ -138,8 +123,10 @@ func main() {
 	router := routes.Run()
 
 	server := &http.Server{
-		Addr:    ":" + config.ServerConfig.Port,
-		Handler: router,
+		Addr:         ":" + config.ServerConfig.Port,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 
 	done := make(chan os.Signal, 1)

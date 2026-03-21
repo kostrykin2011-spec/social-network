@@ -12,16 +12,13 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"os"
-	"os/signal"
 	"runtime"
 	"social-network/pkg/database"
 	"social-network/pkg/models"
 	"social-network/pkg/service"
 	"social-network/pkg/utils"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,13 +50,13 @@ type ParsedResult struct {
 }
 
 type generateHandler struct {
-	routerDB          *database.ReplicationRouter
+	routerDB          *database.DBRouter
 	authService       service.AuthService
 	friendShipService service.FriendShipService
 	postService       service.PostService
 }
 
-func InitGenerateHandler(routerDB *database.ReplicationRouter, authService service.AuthService, friendShipService service.FriendShipService, postService service.PostService) GenerateHandler {
+func InitGenerateHandler(routerDB *database.DBRouter, authService service.AuthService, friendShipService service.FriendShipService, postService service.PostService) GenerateHandler {
 	return &generateHandler{
 		routerDB:          routerDB,
 		authService:       authService,
@@ -172,47 +169,47 @@ func (handler *generateHandler) generateUsers(ctx context.Context) {
 	close(resultChan)
 	<-resultDone
 
-	userIdsMu.Lock()
-	defer userIdsMu.Unlock()
+	// userIdsMu.Lock()
+	// defer userIdsMu.Unlock()
 
-	randomIndex := rand.N(len(userIds))
+	// randomIndex := rand.N(len(userIds))
 
-	currentUserId := userIds[randomIndex]
-	log.Println("Пользователь, получающий события от друзей на websocket-сервер: " + currentUserId.String())
+	// currentUserId := userIds[randomIndex]
+	// log.Println("Пользователь, получающий события от друзей на websocket-сервер: " + currentUserId.String())
 
-	var friendIds []uuid.UUID
+	// var friendIds []uuid.UUID
 
-	// Добавляем текущему пользователю - 3 друзей
-	countUserIds := len(userIds)
+	// // Добавляем текущему пользователю - 3 друзей
+	// countUserIds := len(userIds)
 
-	for i := 0; i < 3; i++ {
-		randomIndex = rand.N(countUserIds)
-		friendId := userIds[randomIndex]
-		if friendId == currentUserId {
-			continue
-		}
+	// for i := 0; i < 3; i++ {
+	// 	randomIndex = rand.N(countUserIds)
+	// 	friendId := userIds[randomIndex]
+	// 	if friendId == currentUserId {
+	// 		continue
+	// 	}
 
-		log.Printf("Автор постов #%v: %v", strconv.Itoa(i), friendId.String())
+	// 	log.Printf("Автор постов #%v: %v", strconv.Itoa(i), friendId.String())
 
-		friendIds = append(friendIds, friendId)
-		err := handler.friendShipService.AddFiend(ctx, currentUserId, friendId)
-		if err != nil {
-		}
-	}
-	if len(friendIds) <= 0 {
-		return
-	}
+	// 	friendIds = append(friendIds, friendId)
+	// 	err := handler.friendShipService.AddFiend(ctx, currentUserId, friendId)
+	// 	if err != nil {
+	// 	}
+	// }
+	// if len(friendIds) <= 0 {
+	// 	return
+	// }
 
-	posts, err := handler.getPostsFromFile()
-	if err != nil {
-		log.Println(err.Error())
-		return
-	}
-	stopWorkersUser := handler.StartUsersInBackground(friendIds, posts, len(posts))
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
-	stopWorkersUser()
+	// posts, err := handler.getPostsFromFile()
+	// if err != nil {
+	// 	log.Println(err.Error())
+	// 	return
+	// }
+	// stopWorkersUser := handler.StartUsersInBackground(friendIds, posts, len(posts))
+	// c := make(chan os.Signal, 1)
+	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	// <-c
+	// stopWorkersUser()
 }
 
 // Друзья будут публиковать посты в разное время (от 1 до 20 сек) бесконечно (до отмены)

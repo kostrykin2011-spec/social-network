@@ -15,10 +15,10 @@ type TestHandler interface {
 }
 
 type testHandler struct {
-	routerDB *database.ReplicationRouter
+	routerDB *database.DBRouter
 }
 
-func InitTestHandler(routerDB *database.ReplicationRouter) TestHandler {
+func InitTestHandler(routerDB *database.DBRouter) TestHandler {
 	return &testHandler{
 		routerDB: routerDB,
 	}

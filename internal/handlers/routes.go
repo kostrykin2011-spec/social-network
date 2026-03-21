@@ -27,7 +27,7 @@ type Routes struct {
 	log               *logger.Logger
 }
 
-func InitRoutes(config *config.Config, authService service.AuthService, profileService service.ProfileService, friendfiendShipService service.FriendShipService, postService service.PostService, grpcChatClient chat.ChatServiceClient, routerDB *database.ReplicationRouter, log *logger.Logger) *Routes {
+func InitRoutes(config *config.Config, authService service.AuthService, profileService service.ProfileService, friendfiendShipService service.FriendShipService, postService service.PostService, grpcChatClient chat.ChatServiceClient, routerDB *database.DBRouter, log *logger.Logger) *Routes {
 	return &Routes{
 		config:            config,
 		ProfileHandler:    InitUserHandler(profileService),
@@ -44,8 +44,8 @@ func InitRoutes(config *config.Config, authService service.AuthService, profileS
 func (route *Routes) Run() *mux.Router {
 	router := mux.NewRouter()
 	// Добавляем middleware для логирования ВСЕХ запросов
-	router.Use(route.loggingMiddleware)
-	router.Use(route.recoveryMiddleware)
+	//router.Use(route.loggingMiddleware)
+	//router.Use(route.recoveryMiddleware)
 
 	router.HandleFunc("/login", route.AuthHandler.Login).Methods("POST")
 	router.HandleFunc("/user/register", route.AuthHandler.UserRegister).Methods("POST")
@@ -103,11 +103,6 @@ func (route *Routes) AuthMiddleware(config *config.Config, next http.HandlerFunc
 		}
 
 		ctx := context.WithValue(req.Context(), "user_id", claims.UserID.String())
-
-		log.FromContext(ctx).Info().
-			Str("user_id", claims.UserID.String()).
-			Msg("Authentication successful")
-
 		next.ServeHTTP(w, req.WithContext(ctx))
 	}
 }

@@ -19,10 +19,10 @@ type ProfileRepository interface {
 }
 
 type profileRepository struct {
-	routerDB *database.ReplicationRouter
+	routerDB *database.DBRouter
 }
 
-func InitProfileRepository(routerDB *database.ReplicationRouter) ProfileRepository {
+func InitProfileRepository(routerDB *database.DBRouter) ProfileRepository {
 	return &profileRepository{routerDB: routerDB}
 }
 

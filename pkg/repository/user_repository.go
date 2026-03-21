@@ -16,10 +16,10 @@ type UserRepository interface {
 }
 
 type userRepository struct {
-	routerDB *database.ReplicationRouter
+	routerDB *database.DBRouter
 }
 
-func InitUserRepository(routerDB *database.ReplicationRouter) UserRepository {
+func InitUserRepository(routerDB *database.DBRouter) UserRepository {
 	return &userRepository{routerDB: routerDB}
 }
 
