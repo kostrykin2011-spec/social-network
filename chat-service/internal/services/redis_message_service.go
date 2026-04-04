@@ -2,6 +2,7 @@ package services
 
 import (
 	"chat-service/internal/domain"
+	"chat-service/internal/events"
 	"chat-service/internal/helpers"
 	"context"
 	"encoding/json"
@@ -15,9 +16,10 @@ import (
 type RedisMessageService struct {
 	redisClient *redis.ClusterClient
 	scriptSHA   string
+	event       *events.SendMessageEvent
 }
 
-func InitRedisMessageService(redisClient *redis.ClusterClient) *RedisMessageService {
+func InitRedisMessageService(redisClient *redis.ClusterClient, event *events.SendMessageEvent) *RedisMessageService {
 	scriptText := `
 	local dialog_id = redis.call('GET', KEYS[1])
 	if not dialog_id then
@@ -41,6 +43,7 @@ func InitRedisMessageService(redisClient *redis.ClusterClient) *RedisMessageServ
 	return &RedisMessageService{
 		redisClient: redisClient,
 		scriptSHA:   shaScript,
+		event:       event,
 	}
 }
 
@@ -54,6 +57,15 @@ func (service *RedisMessageService) Send(ctx context.Context, messageRequest dom
 	messageKey := hashKey + ":message"
 
 	_, err := service.redisClient.EvalSha(ctx, service.scriptSHA, []string{dialogKey, messageKey}, messageRequest.Content, time, newDialogId).Result()
+	if err != nil {
+		return fmt.Errorf("Ошибка в LUA-скрипте: %w", err)
+	}
+
+	if err := service.event.PublishMessage(ctx, senderId.String(), recipientId.String()); err != nil {
+		service.redisClient.ZRemRangeByScore(ctx, messageKey, fmt.Sprintf("%d", time), fmt.Sprintf("%d", time))
+
+		return fmt.Errorf("Ошибка - очередь для микросервиса Счетчики не доступна: %w", err)
+	}
 
 	return err
 }

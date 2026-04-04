@@ -7,8 +7,7 @@ import (
 )
 
 type ServerConfig struct {
-	Port      string
-	JwtSecret string
+	Port string
 }
 
 type DBConfig struct {
@@ -17,6 +16,14 @@ type DBConfig struct {
 	DBUser     string
 	DBPassword string
 	DBName     string
+}
+
+type RedisConfig struct {
+	RedisHost     string
+	RedisPort     int
+	RedisPassword string
+	RedisDB       int
+	RedisPoolSize int
 }
 
 type RabbitMQConfig struct {
@@ -29,22 +36,33 @@ type RabbitMQConfig struct {
 type Config struct {
 	ServerConfig   ServerConfig
 	DBConfig       DBConfig
+	RedisConfig    RedisConfig
 	RabbitMQConfig RabbitMQConfig
 }
 
 func InitConfig() *Config {
+	redisDb, _ := strconv.Atoi(getEnv("REDIS_DB", "0"))
+	redisPoolSize, _ := strconv.Atoi(getEnv("REDIS_POOL_SIZE", "10"))
+	redisPort, _ := strconv.Atoi(getEnv("REDIS_PORT", "6379"))
 	rabbitMQPort, _ := strconv.Atoi(getEnv("RABBITMQ_PORT", "5672"))
+
 	return &Config{
 		ServerConfig: ServerConfig{
-			Port:      getEnv("SERVER_PORT", "5001"),
-			JwtSecret: getEnv("JWT_SECRET", "ef3e2915c7dab47da1946ef3e2915c7dab47da1946712b4d739668d712b4d739668d"),
+			Port: getEnv("SERVER_PORT", "5001"),
 		},
 		DBConfig: DBConfig{
-			DBHost:     getEnv("DB_HOST", "citus-coordinator"),
+			DBHost:     getEnv("DB_HOST", "counter-service-db"),
 			DBPort:     getEnv("DB_PORT", "5432"),
 			DBUser:     getEnv("DB_USER", "postgres"),
-			DBPassword: getEnv("DB_PASSWORD", "citus_password"),
-			DBName:     getEnv("DB_NAME", "chat_service"),
+			DBPassword: getEnv("DB_PASSWORD", "password"),
+			DBName:     getEnv("DB_NAME", "counter_service"),
+		},
+		RedisConfig: RedisConfig{
+			RedisHost:     getEnv("REDIS_HOST", "redis"),
+			RedisPort:     redisPort,
+			RedisPassword: getEnv("REDIS_PASSWORD", ""),
+			RedisDB:       redisDb,
+			RedisPoolSize: redisPoolSize,
 		},
 		RabbitMQConfig: RabbitMQConfig{
 			RabbitMQHost:     getEnv("RABBITMQ_HOST", "rabbitmq"),
@@ -55,7 +73,7 @@ func InitConfig() *Config {
 	}
 }
 
-func (cnf *Config) GetConnectString(config DBConfig) string {
+func (cnf *Config) GetDBConnectString(config DBConfig) string {
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName)
 }

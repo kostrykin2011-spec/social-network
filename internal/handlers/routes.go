@@ -7,6 +7,7 @@ import (
 	"social-network/pkg/database"
 	"social-network/pkg/logger"
 	"social-network/pkg/pb/chat"
+	"social-network/pkg/pb/counter"
 	"social-network/pkg/service"
 	"social-network/pkg/utils"
 	"strings"
@@ -15,29 +16,31 @@ import (
 )
 
 type Routes struct {
-	config            *config.Config
-	ProfileHandler    ProfileHandler
-	AuthHandler       AuthHandler
-	FriendShipHandler FriendsHandler
-	PostHandler       PostHandler
-	GenerateHandler   GenerateHandler
-	TestHandler       TestHandler
-	ChatHandler       ChatHandler
-	WebsocketHandler  *WebSocketHandler
-	log               *logger.Logger
+	config                *config.Config
+	ProfileHandler        ProfileHandler
+	AuthHandler           AuthHandler
+	FriendShipHandler     FriendsHandler
+	PostHandler           PostHandler
+	GenerateHandler       GenerateHandler
+	TestHandler           TestHandler
+	ChatHandler           ChatHandler
+	CounterMessageHandler *CounterMessageHandler
+	WebsocketHandler      *WebSocketHandler
+	log                   *logger.Logger
 }
 
-func InitRoutes(config *config.Config, authService service.AuthService, profileService service.ProfileService, friendfiendShipService service.FriendShipService, postService service.PostService, grpcChatClient chat.ChatServiceClient, routerDB *database.DBRouter, log *logger.Logger) *Routes {
+func InitRoutes(config *config.Config, authService service.AuthService, profileService service.ProfileService, friendfiendShipService service.FriendShipService, postService service.PostService, grpcChatClient chat.ChatServiceClient, grpcCounterClient counter.CounterServiceClient, routerDB *database.DBRouter, log *logger.Logger) *Routes {
 	return &Routes{
-		config:            config,
-		ProfileHandler:    InitUserHandler(profileService),
-		AuthHandler:       InitAuthHandler(authService),
-		FriendShipHandler: InitFriendShipHandler(friendfiendShipService),
-		PostHandler:       InitPostHandler(postService),
-		GenerateHandler:   InitGenerateHandler(routerDB, authService, friendfiendShipService, postService),
-		ChatHandler:       InitChatHandler(grpcChatClient, log),
-		TestHandler:       InitTestHandler(routerDB),
-		log:               log,
+		config:                config,
+		ProfileHandler:        InitUserHandler(profileService),
+		AuthHandler:           InitAuthHandler(authService),
+		FriendShipHandler:     InitFriendShipHandler(friendfiendShipService),
+		PostHandler:           InitPostHandler(postService),
+		GenerateHandler:       InitGenerateHandler(routerDB, authService, friendfiendShipService, postService),
+		ChatHandler:           InitChatHandler(grpcChatClient, log),
+		CounterMessageHandler: InitCounterHandler(grpcCounterClient, log),
+		TestHandler:           InitTestHandler(routerDB),
+		log:                   log,
 	}
 }
 
@@ -60,6 +63,8 @@ func (route *Routes) Run() *mux.Router {
 	router.HandleFunc("/post/feed/count", route.AuthMiddleware(route.config, route.PostHandler.GetFeedCount)).Methods("GET")
 	router.HandleFunc("/dialog/{user_id}/send", route.AuthMiddleware(route.config, route.ChatHandler.Send)).Methods("POST")
 	router.HandleFunc("/dialog/{user_id}/list", route.AuthMiddleware(route.config, route.ChatHandler.GetMessages)).Methods("GET")
+	router.HandleFunc("/dialog/{user_id}/count", route.AuthMiddleware(route.config, route.CounterMessageHandler.GetCountMessagesByDialog)).Methods("GET")
+	router.HandleFunc("/dialog/{user_id}/reset", route.AuthMiddleware(route.config, route.CounterMessageHandler.ResetCountByDialog)).Methods("POST")
 	router.HandleFunc("/generate/users", route.GenerateHandler.GenerateUsers).Methods("GET")
 
 	return router

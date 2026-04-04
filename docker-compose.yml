@@ -23,7 +23,7 @@ services:
       - ./volumes/social-network-db:/var/lib/postgresql/data
     networks:
       - social-network
-
+ 
   pgslave:
     image: postgres:16.2
     container_name: pgslave
@@ -51,6 +51,20 @@ services:
     volumes:
       - pgasyncslave_data:/var/lib/postgresql/data
       - ./volumes/pgasyncslave:/var/lib/postgresql/data
+    networks:
+      - social-network
+
+  counter-service-db:
+    image: postgres:16.2
+    container_name: counter-service-db
+    environment:
+      POSTGRES_DB: counter_service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+    volumes:
+      - counter-service-db-data:/var/lib/postgresql/data
     networks:
       - social-network
 
@@ -169,6 +183,17 @@ services:
       - redis-node-5
       - redis-node-6
     command: sh -c "sleep 5 && redis-cli --cluster create redis-node-1:6379 redis-node-2:6379 redis-node-3:6379 redis-node-4:6379 redis-node-5:6379 redis-node-6:6379 --cluster-replicas 1 --cluster-yes"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5677:5672"
+      - "15677:15672"
+    networks:
+      - social-network
 
   rabbitmq-1:
     image: rabbitmq:3-management-alpine
@@ -333,7 +358,24 @@ services:
       APP_PORT: 5001
     volumes:
       - ./users.csv:/app/users.csv
-
+  counter-service:
+    build:
+      context: .
+      dockerfile: counter-service/Dockerfile
+    container_name: counter-service
+    depends_on:
+      redis-cluster-creator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    ports:
+      - "15006:5001"
+    networks:
+      - social-network
+    environment:
+      APP_HOST: app-1
+      APP_PORT: 5001
+    volumes:
+      - ./users.csv:/app/users.csv
 volumes:
   postgres_data:
     driver: local
@@ -341,7 +383,11 @@ volumes:
     driver: local
   pgasyncslave_data:
     driver: local
+  counter-service-db-data:
+    driver: local
   redis_data:
+    driver: local
+  rabbitmq_data: 
     driver: local
   rabbitmq_data_1:
    driver: local

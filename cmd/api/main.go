@@ -6,8 +6,9 @@ import (
 	"os"
 	"os/signal"
 	"social-network/internal/cache"
-	chat "social-network/internal/client"
+	"social-network/internal/chat"
 	"social-network/internal/config"
+	"social-network/internal/counter"
 	"social-network/internal/feed"
 	"social-network/internal/handlers"
 	"social-network/internal/queue"
@@ -80,6 +81,14 @@ func main() {
 		log.Info().Msg("Подключено к микросервису чатов")
 	}
 
+	log.Info().Msg("Подключение к микросервису счетчики (gRPC)...")
+	grpcCounterClient := counter.InitCounterClient()
+	if grpcCounterClient == nil {
+		log.Warn().Msg("Микросервис чатов недоступен, функции чата будут ограничены")
+	} else {
+		log.Info().Msg("Подключено к микросервису чатов")
+	}
+
 	log.Info().Msg("Инициализация репозиториев...")
 	userRepository := repository.InitUserRepository(routerDB)
 	profileRepository := repository.InitProfileRepository(routerDB)
@@ -117,6 +126,7 @@ func main() {
 		friendShipService,
 		postService,
 		grpcChatClient,
+		grpcCounterClient,
 		routerDB,
 		log,
 	)

@@ -77,7 +77,8 @@ func (s *ChatService) SendMessage(ctx context.Context, req *chat.SendMessageRequ
 		Content: req.Content,
 	}
 
-	if err := s.redis.Send(ctx, message, senderID, friendID); err != nil {
+	err = s.redis.Send(ctx, message, senderID, friendID)
+	if err != nil {
 		log.Error().Err(err).Msg("Ошибка сохранения в Redis Cluster")
 		return nil, status.Error(codes.Internal, "Ошибка сохранения сообщения в Redis Cluster")
 	}

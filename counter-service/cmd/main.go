@@ -1,23 +1,20 @@
 package main
 
 import (
-	"chat-service/config"
-	"chat-service/internal/cache"
-	"chat-service/internal/events"
-	"chat-service/internal/helpers"
-	"chat-service/internal/logger"
-	"chat-service/internal/services"
 	"context"
-	"encoding/csv"
-	"fmt"
+	"counter-service/cache"
+	"counter-service/config"
+	"counter-service/internal/consumer"
+	"counter-service/internal/repository"
+	"counter-service/internal/services"
+	logger "counter-service/pkg"
+	"counter-service/pkg/database"
 	"net"
 	"os"
 	"os/signal"
-	"social-network/pkg/pb/chat"
+	"social-network/pkg/pb/counter"
 	"syscall"
 
-	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 	"github.com/rabbitmq/amqp091-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -26,30 +23,46 @@ import (
 
 func main() {
 	log := logger.New(logger.Config{
-		ServiceName: "chat-service",
+		ServiceName: "counter-service",
 	})
-
-	log.Info().Msg("Запуск микросервиса диалогов")
+	log.Info().Msg("Запуск микросервиса счетчиков")
 
 	config := config.InitConfig()
 	log.Info().Str("port", config.ServerConfig.Port).Msg("Конфигурация загружена")
 
-	rdb := cache.InitRedis()
-	defer rdb.Close()
-	log.Info().Msg("Redis подключен")
+	log.Info().Msg("Подключение к Redis...")
+	redisClient, err := cache.InitRedis(config)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Не удалось подключиться к Redis")
+	}
+	log.Info().Msg("Подключено к Redis")
+	defer cache.Close()
 
 	log.Info().Msg("Подключение к RabbitMQ...")
 	rabbitMQConnect, err := amqp091.Dial(config.GetConnectRabbitMQString("rabbitmq"))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Не удалось подключиться к RabbitMQ")
 	}
-	defer rabbitMQConnect.Close()
 	log.Info().Msg("Подключено к RabbitMQ")
+	defer rabbitMQConnect.Close()
 
-	sendMessageEvent := events.InitSendMessageEvent(rabbitMQConnect)
+	db, err := database.InitDatabase(config.GetDBConnectString(config.DBConfig))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Не удалось подключиться к БД")
+	}
+	log.Info().Msg("Подключено к БД")
+	defer db.Close()
 
-	redisService := services.InitRedisMessageService(rdb, sendMessageEvent)
-	chatService := services.NewChatService(redisService, log)
+	dbRepository := repository.InitCounterDBRepository(db)
+	redisRepository := repository.InitCacheCounterRepository(redisClient)
+
+	counterService := services.InitCounterService(dbRepository, redisRepository, log)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	consumerMessageSent := consumer.InitMessageConsumer(rabbitMQConnect, redisRepository, dbRepository, log)
+	go consumerMessageSent.Start(ctx)
 
 	lis, err := net.Listen("tcp", ":"+config.ServerConfig.Port)
 	if err != nil {
@@ -60,7 +73,8 @@ func main() {
 		grpc.UnaryInterceptor(loggingInterceptor(log)),
 	)
 
-	chat.RegisterChatServiceServer(grpcServer, chatService)
+	counterGrpcService := services.NewCounterGrpcService(counterService, log)
+	counter.RegisterCounterServiceServer(grpcServer, counterGrpcService)
 	reflection.Register(grpcServer)
 
 	done := make(chan os.Signal, 1)
@@ -78,6 +92,7 @@ func main() {
 
 	grpcServer.GracefulStop()
 	log.Info().Msg("Сервер остановлен")
+
 }
 
 func loggingInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
@@ -108,31 +123,5 @@ func loggingInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
 		}
 
 		return resp, err
-	}
-}
-
-func loadTestData() {
-	filePath := "/app/users.csv"
-	if filePath == "" {
-		fmt.Println("Файл users.csv не найден")
-	}
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		fmt.Println("Ошибка при открытии файла:", err)
-	}
-
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		fmt.Println("Ошибка при чтении CSV:", err)
-	}
-
-	globalUUIDCache := helpers.Instance()
-	for _, record := range records {
-		userId, _ := uuid.Parse(record[0])
-		globalUUIDCache.Add(userId)
 	}
 }

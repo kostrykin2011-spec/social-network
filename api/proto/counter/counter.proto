@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package counter;
+
+option go_package = "counter-service/pkg/pb/counter"; 
+
+service CounterService {
+  rpc GetCount (GetCountRequest) returns (GetCountResponse);
+  rpc Reset (ResetRequest) returns (ResetResponse);
+}
+
+message GetCountRequest {
+  string recipient_id = 1;
+}
+
+message GetCountResponse {
+  string recipient_id = 1;
+  int64 count = 2;
+}
+
+message ResetRequest {
+  string recipient_id = 1;
+}
+
+message ResetResponse {
+  string recipient_id = 1;
+  bool result = 2;
+}
