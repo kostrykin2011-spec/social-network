@@ -6,15 +6,21 @@ import (
 	"chat-service/internal/events"
 	"chat-service/internal/helpers"
 	"chat-service/internal/logger"
+	"chat-service/internal/metrics"
 	"chat-service/internal/services"
 	"context"
 	"encoding/csv"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"social-network/pkg/pb/chat"
 	"syscall"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -34,9 +40,34 @@ func main() {
 	config := config.InitConfig()
 	log.Info().Str("port", config.ServerConfig.Port).Msg("Конфигурация загружена")
 
+	metrics := metrics.NewMetrics()
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		if err := http.ListenAndServe(":9091", nil); err != nil {
+			log.Error().Err(err).Msg("Ошибка сервера метрик")
+		}
+	}()
+
 	rdb := cache.InitRedis()
 	defer rdb.Close()
 	log.Info().Msg("Redis подключен")
+
+	err := helpers.Retry(15, 2*time.Second, func() error {
+		log.Info().Msg("Ожидание доступности Redis...")
+		return rdb.Ping(context.Background()).Err()
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Redis не ответил")
+	}
+
+	time.Sleep(1 * time.Second)
+
+	err = rdb.ForEachMaster(context.Background(), func(ctx context.Context, client *redis.Client) error {
+		if client == nil {
+			return fmt.Errorf("node not ready")
+		}
+		return client.Ping(ctx).Err()
+	})
 
 	log.Info().Msg("Подключение к RabbitMQ...")
 	rabbitMQConnect, err := amqp091.Dial(config.GetConnectRabbitMQString("rabbitmq"))
@@ -47,8 +78,7 @@ func main() {
 	log.Info().Msg("Подключено к RabbitMQ")
 
 	sendMessageEvent := events.InitSendMessageEvent(rabbitMQConnect)
-
-	redisService := services.InitRedisMessageService(rdb, sendMessageEvent)
+	redisService := services.InitRedisMessageService(rdb, sendMessageEvent, metrics)
 	chatService := services.NewChatService(redisService, log)
 
 	lis, err := net.Listen("tcp", ":"+config.ServerConfig.Port)

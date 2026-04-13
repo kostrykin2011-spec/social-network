@@ -36,7 +36,7 @@ RUN addgroup -g 1001 -S appuser && \
 USER appuser
 
 # Экспортируем порт
-EXPOSE 5001
+EXPOSE 5001 9091
 
 # Запускаем приложение
 CMD ["./chat-server-bin"]

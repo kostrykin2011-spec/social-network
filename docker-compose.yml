@@ -351,6 +351,7 @@ services:
     restart: unless-stopped
     ports:
       - "15005:5001"
+      - "9091:9091"
     networks:
       - social-network
     environment:
@@ -358,6 +359,80 @@ services:
       APP_PORT: 5001
     volumes:
       - ./users.csv:/app/users.csv
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/targets:/etc/prometheus/targets
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - social-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - social-network
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:latest
+    container_name: zabbix-server
+    ports:
+      - "10051:10051"
+    environment:
+      - DB_SERVER_HOST=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=zabbix
+    depends_on:
+      - postgres
+    networks:
+      - social-network
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:latest
+    container_name: zabbix-web
+    ports:
+      - "8081:8080"
+    environment:
+      - ZBX_SERVER_HOST=zabbix-server
+      - DB_SERVER_HOST=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=zabbix
+    depends_on:
+      - zabbix-server
+    networks:
+      - social-network
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:latest
+    container_name: zabbix-agent
+    privileged: true
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ZBX_HOSTNAME=ChatServer
+      - ZBX_SERVER_HOST=zabbix-server
+    networks:
+      - social-network
   counter-service:
     build:
       context: .
@@ -410,6 +485,10 @@ volumes:
   redis-node-5-data:
     driver: local
   redis-node-6-data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
     driver: local
 
 networks:

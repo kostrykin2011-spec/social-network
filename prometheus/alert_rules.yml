@@ -1,0 +1,29 @@
+groups:
+  - name: MonitoringAlerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(chat_service_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Высокий уровень ошибок в Chat Service"
+          description: "Текущая частота ошибок: {{ $value | printf \"%.2f\" }} в секунду."
+
+      - alert: SlowRequests
+        expr: histogram_quantile(0.99, rate(chat_service_request_duration_seconds_bucket[5m])) > 0.5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Медленные ответы API"
+          description: "99% запросов обрабатываются дольше 0.5 сек (текущее: {{ $value | printf \"%.2f\" }} сек)."
+
+      - alert: ServiceDown
+        expr: up{job="chat-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сервис чата недоступен"
+          description: "Контейнер chat-service не отвечает более 1 минуты."

@@ -52,7 +52,7 @@ func InitDatabase(connStr string) (*sql.DB, error) {
 
 func createTables(db *sql.DB) error {
 	query := `
-		CREATE TABLE counters (
+		CREATE TABLE IF NOT EXISTS counters (
     		user_id UUID NOT NULL,
     		recipient_id UUID NOT NULL,
     		unread_count INT DEFAULT 0,
